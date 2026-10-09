@@ -1,0 +1,315 @@
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev' version '2.0.140'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = 'PMWeather-IV'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+// Declare the optional source set before the private artifact task config uses it.
+sourceSets.maybeCreate('dev')
+
+neoForge {
+    version = neoforge_version
+
+    runs {
+        client { client() }
+        server {
+            server()
+            programArgument '--nogui'
+        }
+    }
+
+    mods {
+        pmweather_iv { sourceSet sourceSets.main }
+    }
+}
+
+repositories {
+    // All PMWeather-IV integration compile baselines are retained in libs/.
+    flatDir { dirs 'libs' }
+}
+
+dependencies {
+    // Exact IV and PMWeather compile baselines are retained in libs/. They are not bundled.
+    compileOnly files('libs/Immersive Vehicles-1.21.1-24.0.0.jar')
+    compileOnly files('libs/pmweather-1.21.1-0.17.14-alpha.jar')
+    runtimeOnly files('libs/Immersive Vehicles-1.21.1-24.0.0.jar')
+    runtimeOnly files('libs/pmweather-1.21.1-0.17.14-alpha.jar')
+
+    // Sable 2.0.5 is the development compile/runtime baseline. Runtime metadata
+    // intentionally accepts the compatible 2.x API range [2.0.5,3.0.0).
+    // These dependency JARs are compile inputs only and are not bundled into PMIV.
+    compileOnly files('libs/sable-neoforge-1.21.1-2.0.5.jar')
+    runtimeOnly files('libs/sable-neoforge-1.21.1-2.0.5.jar')
+
+    // Sable embeds Companion 1.6.0 as a nested JAR. Gradle does not expose nested
+    // JAR classes on the compile classpath, so keep the matching API beside the
+    // Sable development JAR for Pose3d/Pose3dc compilation.
+    compileOnly files('libs/sable-companion-common-1.21.1-1.6.0.jar')
+}
+
+tasks.named('jar', Jar).configure {
+    archiveFileName = "PMWeather-IV-${project.version}.jar"
+    from(files('LICENSE', 'COPYING', 'COPYING.LESSER', 'THIRD_PARTY_NOTICES.md')) { into 'META-INF/licenses/pmweather_iv' }
+    from('docs/CONTENT-PACK-AIR-WARNING-SOUNDS.md') {
+        into 'docs'
+    }
+    manifest {
+        attributes([
+            'Implementation-Title': project.mod_name,
+            'Implementation-Version': project.version
+        ])
+    }
+}
+
+tasks.register('jarDev', Jar) {
+    dependsOn tasks.named('classes'), tasks.named('devClasses')
+    archiveFileName = "PMWeather-IV-${project.version}-dev.jar"
+    from(sourceSets.main.output)
+    from(sourceSets.dev.output)
+    from(files('LICENSE', 'COPYING', 'COPYING.LESSER', 'THIRD_PARTY_NOTICES.md')) {
+        into 'META-INF/licenses/pmweather_iv'
+    }
+    from('docs/CONTENT-PACK-AIR-WARNING-SOUNDS.md') { into 'docs' }
+    manifest {
+        attributes([
+            'Implementation-Title': "${project.mod_name} (development)",
+            'Implementation-Version': "${project.version}-dev"
+        ])
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// Standalone comparisons exercise real geometry/material/trace classes without a game.
+sourceSets {
+    dev {
+        java.setSrcDirs(['src/dev/java'])
+        resources.setSrcDirs(['src/dev/resources'])
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += sourceSets.main.output + configurations.runtimeClasspath
+    }
+    regression {
+        java.srcDir 'tools'
+        java.include '*Regression.java'
+        java.exclude 'TraceSchemaRegression.java', 'TraceFeedbackRegression.java', 'TraceStorageRegression.java'
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += sourceSets.main.output + configurations.compileClasspath
+    }
+    devRegression {
+        java.srcDir 'tools'
+        java.include 'TraceSchemaRegression.java'
+        java.include 'TraceFeedbackRegression.java'
+        java.include 'TraceStorageRegression.java'
+        compileClasspath += sourceSets.main.output + sourceSets.dev.output + configurations.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.dev.output + configurations.compileClasspath
+    }
+}
+
+['GeometryRegression', 'TerrainGeometryRegression', 'MaterialRegression'].each { regression ->
+    def captured = new ByteArrayOutputStream()
+    def verification = tasks.register("check${regression}", JavaExec) {
+        dependsOn tasks.named('regressionClasses')
+        classpath = sourceSets.regression.runtimeClasspath
+        mainClass = regression
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+        standardOutput = captured
+        doFirst { captured.reset() }
+        doLast {
+            // Normalize Windows stdout newlines; all fixtures print text records.
+            byte[] output = captured.toString('UTF-8').replace('\r\n', '\n').getBytes('UTF-8')
+            def actual = java.security.MessageDigest.getInstance('SHA-256').digest(output).encodeHex().toString()
+            def expected = file("tools/${regression}.sha256").text.trim()
+            if (actual != expected) {
+                throw new GradleException("${regression}: output differs from the reviewed regression baseline")
+            }
+            logger.lifecycle("${regression}: matches reviewed baseline")
+        }
+    }
+    tasks.named('check') { dependsOn verification }
+}
+
+tasks.register('checkTraceSchemaRegression', JavaExec) {
+    dependsOn tasks.named('devRegressionClasses')
+    classpath = sourceSets.devRegression.runtimeClasspath
+    mainClass = 'TraceSchemaRegression'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    def captured = new ByteArrayOutputStream()
+    standardOutput = captured
+    doFirst { captured.reset() }
+    doLast {
+        byte[] output = captured.toString('UTF-8').replace('\r\n', '\n').getBytes('UTF-8')
+        def actual = java.security.MessageDigest.getInstance('SHA-256').digest(output).encodeHex().toString()
+        def expected = file('tools/TraceSchemaRegression.sha256').text.trim()
+        if (actual != expected) {
+            throw new GradleException('TraceSchemaRegression: output differs from the reviewed dev trace baseline')
+        }
+        logger.lifecycle('TraceSchemaRegression: matches reviewed dev trace baseline')
+    }
+}
+
+['CrashGeometryCacheRegression', 'RigidTerrainContactRegression', 'MovingModelHullRegression', 'ContactLifecycleRegression', 'AnimationEvidenceRegression', 'NetworkStateRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'RoadVehicleCompatibilityRegression', 'AuthoredSurfacePoseRegression'].each { regression ->
+    def mainName = ['WingMomentRegression', 'ObserverIsolationRegression', 'AuthoredSurfacePoseRegression'].contains(regression)
+        ? "com.g9third.pmweatheriv.physics.${regression}"
+        : regression
+    def verification = tasks.register("check${regression}", JavaExec) {
+        dependsOn tasks.named('regressionClasses')
+        classpath = sourceSets.regression.runtimeClasspath
+        mainClass = mainName
+        if (regression == 'MovingModelHullRegression' && project.hasProperty('movingHullDefinition')
+            && project.hasProperty('movingHullModel')) {
+            args project.property('movingHullDefinition').toString(), project.property('movingHullModel').toString()
+        }
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+    tasks.named('check') { dependsOn verification }
+}
+
+tasks.register('checkDev') {
+    group = 'verification'
+    description = 'Runs private-development-only trace schema validation.'
+    dependsOn 'checkTraceSchemaRegression', 'checkTraceFeedbackRegression', 'checkTraceStorageRegression', 'checkBuildVariants'
+}
+
+tasks.register('checkTraceStorageRegression', JavaExec) {
+    dependsOn tasks.named('devRegressionClasses')
+    classpath = sourceSets.devRegression.runtimeClasspath
+    mainClass = 'TraceStorageRegression'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    if (project.hasProperty('traceStorageInput')) args project.property('traceStorageInput').toString()
+}
+
+tasks.register('checkTraceFeedbackRegression', JavaExec) {
+    dependsOn tasks.named('devRegressionClasses')
+    classpath = sourceSets.devRegression.runtimeClasspath
+    mainClass = 'TraceFeedbackRegression'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+tasks.register('checkBuildVariants') {
+    group = 'verification'
+    description = 'Checks public/private artifact separation and shared physics class identity.'
+    dependsOn tasks.named('jar'), tasks.named('jarDev')
+    doLast {
+        def publicFile = tasks.named('jar', Jar).get().archiveFile.get().asFile
+        def devFile = tasks.named('jarDev', Jar).get().archiveFile.get().asFile
+        if (!publicFile.isFile() || !devFile.isFile()) {
+            throw new GradleException('Both public and private development jars must exist')
+        }
+
+        def entries = { archive ->
+            def zip = new java.util.zip.ZipFile(archive)
+            try {
+                def found = [:]
+                zip.entries().each { entry ->
+                    if (!entry.directory) found[entry.name] = zip.getInputStream(entry).bytes
+                }
+                found
+            } finally {
+                zip.close()
+            }
+        }
+        def publicEntries = entries(publicFile)
+        def devEntries = entries(devFile)
+        def forbidden = publicEntries.keySet().findAll { name ->
+            name.startsWith('com/g9third/pmweatheriv/trace/')
+                || name == 'com/g9third/pmweatheriv/PMWeatherIVDiagnostics.class'
+                || name == 'com/g9third/pmweatheriv/physics/AircraftDiagnostics.class'
+                || name.startsWith('com/g9third/pmweatheriv/client/ClientWindMonitor')
+                || name.startsWith('com/g9third/pmweatheriv/client/ClientTraceSync')
+                || name.startsWith('com/g9third/pmweatheriv/client/ClientPerformanceCapture')
+                || name.startsWith('com/g9third/pmweatheriv/network/TraceSyncNetwork')
+                || name.startsWith('com/g9third/pmweatheriv/network/WindMonitorNetwork')
+                || name.startsWith('com/g9third/pmweatheriv/devsupport/PMIVDev')
+                || name.startsWith('com/g9third/pmweatheriv/devsupport/PMIVRuntimeProbe')
+                || name == 'com/g9third/pmweatheriv/PMIVDevConfig.class'
+                || name.startsWith('META-INF/services/com.g9third.pmweatheriv.devsupport.PMIVObserver')
+                || name == 'pmivtrace-viewer.html'
+                || name == 'pmivtrace-decode.py'
+                || name.endsWith('.jar')
+        }
+        if (!forbidden.isEmpty()) {
+            throw new GradleException("Public jar contains private tooling or bundled dependency entries: ${forbidden}")
+        }
+
+        def requiredPublic = [
+            'com/g9third/pmweatheriv/devsupport/PMIVObserver.class',
+            'com/g9third/pmweatheriv/mixin/EntityVehiclePhysicsMixin.class',
+            'com/g9third/pmweatheriv/physics/AircraftPhysics.class',
+            'com/g9third/pmweatheriv/physics/AirframeLoads.class',
+            'com/g9third/pmweatheriv/physics/LandingGearSolver.class',
+            'com/g9third/pmweatheriv/physics/PropulsionModel$PropulsionSnapshot.class',
+            'com/g9third/pmweatheriv/physics/RoadVehiclePhysics.class',
+            'com/g9third/pmweatheriv/physics/RotorModel.class',
+            'com/g9third/pmweatheriv/network/AircraftStateNetwork.class',
+            'com/g9third/pmweatheriv/sable/SableVehicleManager.class',
+            'com/g9third/pmweatheriv/sable/SableCollisionGameplay.class',
+            'com/g9third/pmweatheriv/terrain/trueimpact/IntegratedImpactTerrain.class',
+            'META-INF/licenses/pmweather_iv/LICENSE',
+            'META-INF/licenses/pmweather_iv/COPYING',
+            'META-INF/licenses/pmweather_iv/COPYING.LESSER',
+            'META-INF/licenses/pmweather_iv/THIRD_PARTY_NOTICES.md',
+            'META-INF/neoforge.mods.toml',
+            'pmweather_iv.mixins.json'
+        ]
+        def missingPublic = requiredPublic.findAll { !publicEntries.containsKey(it) }
+        if (!missingPublic.isEmpty()) {
+            throw new GradleException("Public jar is missing required gameplay or license entries: ${missingPublic}")
+        }
+
+        def requiredDev = [
+            'com/g9third/pmweatheriv/PMIVDevConfig.class',
+            'com/g9third/pmweatheriv/trace/PMIVTraceRecorder.class',
+            'com/g9third/pmweatheriv/PMWeatherIVDiagnostics.class',
+            'com/g9third/pmweatheriv/devsupport/PMIVDevObserverProvider.class',
+            'com/g9third/pmweatheriv/devsupport/PMIVRuntimeProbeCommands.class',
+            'com/g9third/pmweatheriv/network/TraceSyncNetwork.class',
+            'com/g9third/pmweatheriv/client/ClientTraceSync.class',
+            'com/g9third/pmweatheriv/client/ClientPerformanceCapture.class',
+            'com/g9third/pmweatheriv/trace/ServerPerformanceCapture.class',
+            'pmivtrace-viewer.html',
+            'META-INF/services/com.g9third.pmweatheriv.devsupport.PMIVObserver$Provider',
+            'META-INF/services/com.g9third.pmweatheriv.devsupport.PMIVObserver$ClientProvider'
+        ]
+        def missingDev = requiredDev.findAll { !devEntries.containsKey(it) }
+        if (!missingDev.isEmpty()) {
+            throw new GradleException("Private development jar is missing observer tooling entries: ${missingDev}")
+        }
+
+        def publicClasses = publicEntries.keySet().findAll { it.endsWith('.class') } as Set
+        def sharedClasses = publicClasses.intersect(devEntries.keySet().findAll { it.endsWith('.class') } as Set)
+        def absentShared = publicClasses.findAll { !devEntries.containsKey(it) }
+        if (!absentShared.isEmpty()) {
+            throw new GradleException("Private development jar omits shared core classes: ${absentShared}")
+        }
+        def changedShared = sharedClasses.findAll { !java.util.Arrays.equals(publicEntries[it], devEntries[it]) }
+        if (!changedShared.isEmpty()) {
+            throw new GradleException("Shared public/dev classes differ; physics must remain one core: ${changedShared}")
+        }
+        logger.lifecycle("BuildVariants: public exclusions passed; ${sharedClasses.size()} shared class files are byte-identical")
+    }
+}
+
+// Numeric tolerances check coordinate alignment and the coupled contact law.
+tasks.register('checkCoordinateContact', JavaExec) {
+    dependsOn tasks.named('regressionClasses')
+    classpath = sourceSets.regression.runtimeClasspath
+    mainClass = 'CoordinateContactRegression'
+    if (project.hasProperty('accuracyModel')) args project.property('accuracyModel').toString().split(',')
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+tasks.named('check') { dependsOn tasks.named('checkCoordinateContact') }

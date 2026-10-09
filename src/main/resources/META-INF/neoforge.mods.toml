@@ -1,0 +1,63 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="LGPL-3.0-only"
+
+[[mods]]
+modId="pmweather_iv"
+version="0.12.0"
+displayName="PMWeather Immersive Vehicles"
+authors="G9third"
+description='''
+PMWeather-IV connects supported IV ground vehicles, fixed-wing aircraft and rotorcraft
+to PMWeather Aeronautics and Sable.
+PMAero owns source-native XYZ wind, body pressure and virtual lifting surfaces. Sable owns
+rigid-body motion and detailed collisions; IV retains controls, networking and gameplay.
+Fixed-wing pilots can opt into a native elevator-trim-only level-flight assist.
+Wind is sampled at force points once per Minecraft tick. Blimps retain IV-native flight.
+'''
+
+[[mixins]]
+config="pmweather_iv.mixins.json"
+
+[[dependencies.pmweather_iv]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.234,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.pmweather_iv]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.pmweather_iv]]
+modId="mts"
+type="required"
+versionRange="[24,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.pmweather_iv]]
+modId="pmweather"
+type="required"
+versionRange="[0.17.14,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.pmweather_iv]]
+modId="sable"
+type="required"
+versionRange="[2.0.5,3.0.0)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.pmweather_iv]]
+modId="pmweather_aeronautics"
+type="required"
+versionRange="[1.0,)"
+ordering="AFTER"
+side="BOTH"
+

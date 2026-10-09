@@ -1,0 +1,33 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.g9third.pmweatheriv.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BoundingBoxMixin",
+    "BuilderEntityLinkedSeatMixin",
+    "WrapperWorldAccessor",
+    "WrapperWorldMixin",
+    "WrapperEntityRiderMixin",
+    "EntityVehiclePhysicsAccessor",
+    "EntityVehicleMovingAccessor",
+    "EntityVehicleMovingMixin",
+    "EntityVehicleRemovalMixin",
+    "VehicleGroundDeviceCollectionAccessor",
+    "VehicleGroundDeviceCollectionMixin",
+    "VehicleGroundDeviceBoxAccessor",
+    "VehicleGroundDeviceBoxMixin",
+    "PartEngineAccessor",
+    "PartGroundDeviceAccessor",
+    "PartGroundDeviceFakeAccessor",
+    "PartGroundDeviceContactMixin",
+    "EntityVehiclePhysicsMixin",
+    "DefinableAirWarningVariableMixin",
+    "DefinablePersistentWreckSoundMixin",
+    "Rapier3DInvoker",
+    "RapierPhysicsPipelineMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

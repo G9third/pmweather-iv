@@ -1,0 +1,89 @@
+package com.g9third.pmweatheriv.compat;
+
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import net.minecraft.server.level.ServerLevel;
+import com.g9third.pmweatheriv.physics.Vec3d;
+
+/** Required PMAero 1.0 packed API. Failures stop the load update; no second physics law exists. */
+public final class PMAeroBridge {
+    public static final int WIND_STRIDE = 13;
+    public static final int LIFT_INPUT_STRIDE = 35;
+    public static final int LIFT_OUTPUT_STRIDE = 15;
+    private static final MethodHandle WIND;
+    private static final MethodHandle BODY;
+    private static final MethodHandle LIFT;
+
+    static {
+        try {
+            ClassLoader loader = PMAeroBridge.class.getClassLoader();
+            Class<?> wind = Class.forName("com.axes.pmweather_aeronautics.PMWeatherWindApi", false, loader);
+            Class<?> body = Class.forName("com.axes.pmweather_aeronautics.ExternalAirframeBodyApi", false, loader);
+            Class<?> lift = Class.forName("com.axes.pmweather_aeronautics.ExternalLiftingSurfaceApi", false, loader);
+            if (lift.getField("API_VERSION").getInt(null) != 2
+                || body.getField("API_VERSION").getInt(null) != 2
+                || wind.getField("API_VERSION").getInt(null) != 2
+                || wind.getField("PACKED_RESULT_STRIDE").getInt(null) != WIND_STRIDE
+                || body.getField("INPUT_STRIDE").getInt(null) != bodyInputStride()
+                || body.getField("OUTPUT_HEADER_STRIDE").getInt(null) != bodyOutputHeaderStride()
+                || body.getField("OUTPUT_PATCH_STRIDE").getInt(null) != bodyOutputPatchStride()
+                || lift.getField("INPUT_STRIDE").getInt(null) != LIFT_INPUT_STRIDE
+                || lift.getField("OUTPUT_STRIDE").getInt(null) != LIFT_OUTPUT_STRIDE) {
+                throw new IllegalStateException("Unsupported PMAero packed API version or layout");
+            }
+            MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+            WIND = lookup.unreflect(wind.getMethod("sampleAircraftAtmosphereInto", ServerLevel.class, double[].class, double[].class));
+            BODY = lookup.unreflect(body.getMethod("evaluatePackedInto", double[].class, double[].class,
+                double.class, double.class, double.class, double.class, double.class,
+                double.class, double.class, double.class, double.class, double.class));
+            LIFT = lookup.unreflect(lift.getMethod("evaluatePackedInto", double[].class, double[].class));
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(new IllegalStateException(
+                "PMWeather-IV requires the compatible PMWeather Aeronautics 1.0 packed APIs", e));
+        }
+    }
+
+    private PMAeroBridge() {}
+    public static void requireApis() { /* Class initialization validates all three APIs. */ }
+
+    public static void sampleAircraftAtmosphereInto(ServerLevel level, double[] xyz, double[] output) {
+        try {
+            if (!(boolean) WIND.invokeExact(level, xyz, output)) throw new IllegalStateException("Invalid PMAero wind batch");
+        } catch (Throwable failure) { throw apiFailure("wind", failure); }
+        for (int i = 0; i < output.length; i += WIND_STRIDE) {
+            if (!Double.isFinite(output[i]) || !Double.isFinite(output[i + 1]) || !Double.isFinite(output[i + 2])) {
+                throw new IllegalStateException("PMAero returned non-finite wind");
+            }
+        }
+    }
+
+    public static void evaluateLiftInto(double[] input, double[] output) {
+        try {
+            if (!(boolean) LIFT.invokeExact(input, output)) throw new IllegalStateException("Invalid PMAero lifting surface");
+        } catch (Throwable failure) { throw apiFailure("lift", failure); }
+    }
+
+    public static boolean evaluateExternalBodyInto(double[] input, double[] output, double density,
+            double axialCd, double crossflowCd, double width, double height, double length,
+            double wettedArea, Vec3d centerOfMass) {
+        try {
+            if (!(boolean) BODY.invokeExact(input, output, density, axialCd, crossflowCd, width, height, length,
+                    wettedArea, centerOfMass.x(), centerOfMass.y(), centerOfMass.z())) {
+                throw new IllegalStateException("Invalid PMAero body pressure");
+            }
+        } catch (Throwable failure) { throw apiFailure("body", failure); }
+        for (double value : output) if (!Double.isFinite(value)) {
+            throw new IllegalStateException("PMAero returned non-finite body pressure");
+        }
+        return true;
+    }
+
+    public static int bodyInputStride() { return 11; }
+    public static int bodyOutputHeaderStride() { return 6; }
+    public static int bodyOutputPatchStride() { return 5; }
+
+    private static IllegalStateException apiFailure(String operation, Throwable failure) {
+        if (failure instanceof Error error) throw error;
+        return new IllegalStateException("PMAero " + operation + " API failed", failure);
+    }
+}
