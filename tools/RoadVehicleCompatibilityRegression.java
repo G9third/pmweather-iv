@@ -1,5 +1,6 @@
 import com.g9third.pmweatheriv.physics.LiquidSupportModel;
 import com.g9third.pmweatheriv.physics.NativeBallastModel;
+import com.g9third.pmweatheriv.physics.RoadSuspensionRegression;
 import com.g9third.pmweatheriv.physics.SkidSteerDriveDemand;
 import com.g9third.pmweatheriv.physics.GroundContactImpulseSolver;
 import com.g9third.pmweatheriv.physics.Vec3d;
@@ -13,13 +14,14 @@ public final class RoadVehicleCompatibilityRegression {
     private static int assertions;
     private RoadVehicleCompatibilityRegression() {}
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         liquidSupportSeparatesPontoonFromTireAndBallast();
         authoredLiquidBoxesProvideGenericHullStations();
         ballastUsesAuthoredControlAndWaterInputs();
         skidSteerProducesBoundablePivotAndReverseTurnDemand();
         groundSolverConstrainsFourCornerLiquidHullWithoutTireGrip();
         groundSolverAppliesFrictionBoundedTrackDifferentialAtRest();
+        RoadSuspensionRegression.main(args);
         System.out.println("RoadVehicleCompatibilityRegression: " + assertions + " assertions passed (helper/contact fixtures; no game simulation)");
     }
 

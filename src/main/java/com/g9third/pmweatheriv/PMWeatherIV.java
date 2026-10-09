@@ -15,7 +15,7 @@ import com.g9third.pmweatheriv.terrain.trueimpact.IntegratedImpactTerrain;
 @Mod(PMWeatherIV.MOD_ID)
 public final class PMWeatherIV {
     public static final String MOD_ID = "pmweather_iv";
-    public static final String VERSION = "0.12.0";
+    public static final String VERSION = "0.12.0-rc1";
 
     public PMWeatherIV(IEventBus modBus, ModContainer modContainer) {
         PMAeroBridge.requireApis();
@@ -34,6 +34,7 @@ public final class PMWeatherIV {
         NeoForge.EVENT_BUS.addListener(LinkedSeatMountMaintenance::onPlayerTickPost);
         NeoForge.EVENT_BUS.addListener(com.g9third.pmweatheriv.network.AutoTrimNetwork::onPlayerLoggedOut);
         NeoForge.EVENT_BUS.addListener(com.g9third.pmweatheriv.network.RoadSuspensionNetwork::onServerStopping);
+        NeoForge.EVENT_BUS.addListener(com.g9third.pmweatheriv.network.WindMonitorNetwork::onServerStopping);
         NeoForge.EVENT_BUS.addListener(IntegratedImpactTerrain::onServerTickPost);
         NeoForge.EVENT_BUS.addListener(IntegratedImpactTerrain::onServerStopped);
         NeoForge.EVENT_BUS.addListener(PMIVObserver::onServerStarted);

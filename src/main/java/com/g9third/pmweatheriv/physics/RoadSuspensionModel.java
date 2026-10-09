@@ -7,6 +7,7 @@ import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
 import minecrafttransportsimulator.entities.instances.PartGroundDevice;
 import minecrafttransportsimulator.entities.instances.PartGroundDeviceFake;
 import minecrafttransportsimulator.jsondefs.JSONAnimationDefinition;
+import minecrafttransportsimulator.jsondefs.JSONPart;
 import org.joml.Vector3d;
 
 /** Generic series tire/suspension support for managed road vehicles. */
@@ -273,28 +274,38 @@ public final class RoadSuspensionModel {
         if (device == null || device.vehicleOn == null) return true;
         for (APart ancestor = device; ancestor != null; ancestor = ancestor.partOn) {
             var placement = ancestor.placementDefinition;
-            if (placement == null) continue;
-            if (verticalMotionIn(placement.animations, ancestor, device, upWorld)
-                || verticalMotionIn(placement.activeAnimations, ancestor, device, upWorld)) return true;
+            APart parent = ancestor.partOn;
+            var placementFrameOrientation = parent == null
+                ? ancestor.vehicleOn.orientation : parent.orientation;
+            Point3D placementFramePosition = parent == null
+                ? ancestor.vehicleOn.position : parent.position;
+            if (placement != null && verticalMotionIn(placement.animations, device, upWorld,
+                    placementFrameOrientation, placementFramePosition)) return true;
+
+            if (ancestor.definition instanceof JSONPart part && part.generic != null) {
+                // Internal movement runs before APart composes localOrientation
+                // into orientation, so use its parent owner frame plus the
+                // authored placement rotation. The final orientation may already
+                // contain this same steering/spin operation.
+                var genericFrameOrientation = placementFrameOrientation == null
+                    ? null : new minecrafttransportsimulator.baseclasses.RotationMatrix()
+                        .set(placementFrameOrientation);
+                if (genericFrameOrientation != null && placement != null && placement.rot != null)
+                    genericFrameOrientation.multiply(placement.rot);
+                if (verticalMotionIn(part.generic.movementAnimations, device, upWorld,
+                    genericFrameOrientation, ancestor.position)) return true;
+            }
         }
         return false;
     }
 
     private static boolean verticalMotionIn(java.util.List<JSONAnimationDefinition> animations,
-                                            APart animatedPart, PartGroundDevice station,
-                                            Vector3d upWorld) {
+                                            PartGroundDevice station, Vector3d upWorld,
+                                            minecrafttransportsimulator.baseclasses.RotationMatrix frameOrientation,
+                                            Point3D framePosition) {
         if (animations == null) return false;
         for (JSONAnimationDefinition animation : animations) {
             if (animation == null || animation.animationType == null) continue;
-            // Placement movements run in the animation owner's coordinate
-            // frame: the vehicle for a top-level part, or partOn for a nested
-            // part. The part's current orientation already includes its own
-            // animation and is not the input frame for these axes/pivots.
-            APart parent = animatedPart.partOn;
-            var frameOrientation = parent == null
-                ? animatedPart.vehicleOn.orientation : parent.orientation;
-            Point3D framePosition = parent == null
-                ? animatedPart.vehicleOn.position : parent.position;
             if (frameOrientation == null || !finite(framePosition)) return true;
             if (animation.animationType == JSONAnimationDefinition.AnimationComponentType.TRANSLATION) {
                 if (animation.axis == null) return true;
@@ -302,10 +313,7 @@ public final class RoadSuspensionModel {
                 if (!finite(axisWorld) || Math.abs(axisWorld.dot(upWorld)) > MOTION_EPSILON) return true;
             } else if (animation.animationType == JSONAnimationDefinition.AnimationComponentType.ROTATION) {
                 if (animation.axis == null || animation.centerPoint == null
-                    || !finite(animatedPart.position) || !finite(station.position)) return true;
-                // Do not transform through animatedPart.orientation: that
-                // double-applies its own steering/spin rotation and can turn a
-                // planar rotation into a false vertical-motion declaration.
+                    || !finite(framePosition) || !finite(station.position)) return true;
                 Vector3d axisWorld = rotate(frameOrientation, animation.axis);
                 if (!finite(axisWorld) || axisWorld.lengthSquared() <= 1.0E-12) return true;
                 axisWorld.normalize();

@@ -23,10 +23,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(value = PartGroundDevice.class, remap = false)
 public abstract class PartGroundDeviceContactMixin implements RoadSuspensionPartAccess {
     @Unique private double pmweatherIv$appliedSuspensionOffset;
-    @Unique private double pmweatherIv$lastNativeModelY = Double.NaN;
-    @Unique private double pmweatherIv$lastOutputModelX = Double.NaN;
-    @Unique private double pmweatherIv$lastOutputModelY = Double.NaN;
-    @Unique private double pmweatherIv$lastOutputModelZ = Double.NaN;
     @Unique private boolean pmweatherIv$authoredVerticalMotion = true;
 
     @Override
@@ -55,30 +51,15 @@ public abstract class PartGroundDeviceContactMixin implements RoadSuspensionPart
             || (!device.definition.ground.isWheel && !device.definition.ground.isTread)) {
             pmweatherIv$appliedSuspensionOffset = 0.0;
             pmweatherIv$authoredVerticalMotion = true;
-            pmweatherIv$lastOutputModelX = Double.NaN;
-            pmweatherIv$lastOutputModelY = Double.NaN;
-            pmweatherIv$lastOutputModelZ = Double.NaN;
             return;
         }
 
         Vec3d nativeModel = RoadSuspensionModel.nativeCenterLocal(device);
         if (nativeModel == null || !nativeModel.isFinite()) return;
-        boolean previousOffsetStillPresent = Double.isFinite(pmweatherIv$lastOutputModelX)
-            && nativeModel.subtract(new Vec3d(pmweatherIv$lastOutputModelX,
-                pmweatherIv$lastOutputModelY, pmweatherIv$lastOutputModelZ)).lengthSquared() <= 4.0E-8;
-        Vec3d nativeBase = previousOffsetStillPresent
-            ? nativeModel.add(new Vec3d(0.0, -pmweatherIv$appliedSuspensionOffset, 0.0))
-            : nativeModel;
-        if (Double.isFinite(pmweatherIv$lastNativeModelY)
-            && Math.abs(nativeBase.y() - pmweatherIv$lastNativeModelY) > 1.0E-4) {
-            pmweatherIv$authoredVerticalMotion = true;
-        }
-        pmweatherIv$lastNativeModelY = nativeBase.y();
-        if (RoadSuspensionModel.hasDeclaredVerticalStationMotion(device)) {
-            pmweatherIv$authoredVerticalMotion = true;
-        } else if (!Double.isFinite(pmweatherIv$lastOutputModelX)) {
-            pmweatherIv$authoredVerticalMotion = false;
-        }
+        // APart.update rebuilds the native pose from authored placement data
+        // before this injection. Do not infer authored motion from pose deltas:
+        // float noise and our previous fallback travel can change Y.
+        pmweatherIv$authoredVerticalMotion = RoadSuspensionModel.hasDeclaredVerticalStationMotion(device);
 
         double travel = 0.0;
         if (RoadSuspensionModel.supportsFallback(device.vehicleOn, device)) {
@@ -95,22 +76,6 @@ public abstract class PartGroundDeviceContactMixin implements RoadSuspensionPart
         }
         if (!Double.isFinite(travel)) travel = 0.0;
 
-        // Native update has just produced the fresh authored pose. If it did not
-        // rewrite a station, remove only our last known displacement before
-        // applying the new server-owned travel value.
-        if (previousOffsetStillPresent && Math.abs(pmweatherIv$appliedSuspensionOffset) > 1.0E-9) {
-            Vec3d oldWorldValue = RoadSuspensionModel.worldOffset(device, pmweatherIv$appliedSuspensionOffset);
-            Vector3d oldWorld = new Vector3d(oldWorldValue.x(), oldWorldValue.y(), oldWorldValue.z());
-            Vec3d oldParentValue = RoadSuspensionModel.parentOffsetFromWorld(device, oldWorldValue);
-            Vector3d oldParent = new Vector3d(oldParentValue.x(), oldParentValue.y(), oldParentValue.z());
-            device.localOffset.subtract(new minecrafttransportsimulator.baseclasses.Point3D(
-                oldParent.x, oldParent.y, oldParent.z));
-            device.position.subtract(new minecrafttransportsimulator.baseclasses.Point3D(
-                oldWorld.x, oldWorld.y, oldWorld.z));
-            device.boundingBox.globalCenter.subtract(new minecrafttransportsimulator.baseclasses.Point3D(
-                oldWorld.x, oldWorld.y, oldWorld.z));
-        }
-
         Vec3d newWorldValue = RoadSuspensionModel.worldOffset(device, travel);
         Vector3d newWorld = new Vector3d(newWorldValue.x(), newWorldValue.y(), newWorldValue.z());
         Vec3d newParentValue = RoadSuspensionModel.parentOffsetFromWorld(device, newWorldValue);
@@ -125,10 +90,6 @@ public abstract class PartGroundDeviceContactMixin implements RoadSuspensionPart
             device.vehicleOn.groundDeviceCollective.updateBounds();
         }
         pmweatherIv$appliedSuspensionOffset = travel;
-        Vec3d output = nativeBase.add(RoadSuspensionModel.vehicleOffsetFromWorld(device, newWorldValue));
-        pmweatherIv$lastOutputModelX = output.x();
-        pmweatherIv$lastOutputModelY = output.y();
-        pmweatherIv$lastOutputModelZ = output.z();
     }
 
     @Inject(method = "update", at = @At("HEAD"), remap = false)

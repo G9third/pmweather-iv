@@ -2,6 +2,7 @@ package com.g9third.pmweatheriv;
 
 import com.g9third.pmweatheriv.devsupport.PMIVObserver;
 import com.g9third.pmweatheriv.client.AutoTrimClient;
+import com.g9third.pmweatheriv.client.ClientWindMonitor;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -13,9 +14,9 @@ public final class PMWeatherIVClient {
     public PMWeatherIVClient(IEventBus modBus, ModContainer modContainer) {
         PMIVObserver.initializeClient(modBus, modContainer);
         modBus.addListener(AutoTrimClient::registerKeyMappings);
-        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(com.g9third.pmweatheriv.client.ClientWindMonitor::registerCommands);
-        modBus.addListener(com.g9third.pmweatheriv.client.ClientWindMonitor::registerGuiLayer);
-        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(com.g9third.pmweatheriv.client.ClientWindMonitor::onClientTick);
+        modBus.addListener(ClientWindMonitor::registerGuiLayer);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(ClientWindMonitor::registerCommands);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(ClientWindMonitor::onClientTick);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(AutoTrimClient::onClientTick);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(AutoTrimClient::renderBadge);
     }

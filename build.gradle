@@ -101,7 +101,8 @@ sourceSets {
     regression {
         java.srcDir 'tools'
         java.include '*Regression.java'
-        java.exclude 'TraceSchemaRegression.java', 'TraceFeedbackRegression.java', 'TraceStorageRegression.java'
+        java.exclude 'TraceSchemaRegression.java', 'TraceFeedbackRegression.java', 'TraceStorageRegression.java',
+            'PMWeatherIVDiagnosticsRegression.java'
         compileClasspath += sourceSets.main.output + configurations.compileClasspath
         runtimeClasspath += sourceSets.main.output + configurations.compileClasspath
     }
@@ -110,6 +111,7 @@ sourceSets {
         java.include 'TraceSchemaRegression.java'
         java.include 'TraceFeedbackRegression.java'
         java.include 'TraceStorageRegression.java'
+        java.include 'PMWeatherIVDiagnosticsRegression.java'
         compileClasspath += sourceSets.main.output + sourceSets.dev.output + configurations.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.dev.output + configurations.compileClasspath
     }
@@ -159,8 +161,8 @@ tasks.register('checkTraceSchemaRegression', JavaExec) {
     }
 }
 
-['CrashGeometryCacheRegression', 'RigidTerrainContactRegression', 'MovingModelHullRegression', 'ContactLifecycleRegression', 'AnimationEvidenceRegression', 'NetworkStateRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'RoadVehicleCompatibilityRegression', 'AuthoredSurfacePoseRegression'].each { regression ->
-    def mainName = ['WingMomentRegression', 'ObserverIsolationRegression', 'AuthoredSurfacePoseRegression'].contains(regression)
+['CrashGeometryCacheRegression', 'RigidTerrainContactRegression', 'MovingModelHullRegression', 'ContactLifecycleRegression', 'AnimationEvidenceRegression', 'NetworkStateRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'RoadVehicleCompatibilityRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].each { regression ->
+    def mainName = ['WingMomentRegression', 'ObserverIsolationRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].contains(regression)
         ? "com.g9third.pmweatheriv.physics.${regression}"
         : regression
     def verification = tasks.register("check${regression}", JavaExec) {
@@ -181,7 +183,15 @@ tasks.register('checkTraceSchemaRegression', JavaExec) {
 tasks.register('checkDev') {
     group = 'verification'
     description = 'Runs private-development-only trace schema validation.'
-    dependsOn 'checkTraceSchemaRegression', 'checkTraceFeedbackRegression', 'checkTraceStorageRegression', 'checkBuildVariants'
+    dependsOn 'checkTraceSchemaRegression', 'checkTraceFeedbackRegression', 'checkTraceStorageRegression',
+        'checkPMWeatherIVDiagnosticsRegression', 'checkBuildVariants'
+}
+
+tasks.register('checkPMWeatherIVDiagnosticsRegression', JavaExec) {
+    dependsOn tasks.named('devRegressionClasses')
+    classpath = sourceSets.devRegression.runtimeClasspath
+    mainClass = 'com.g9third.pmweatheriv.PMWeatherIVDiagnosticsRegression'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
 }
 
 tasks.register('checkTraceStorageRegression', JavaExec) {
@@ -228,11 +238,9 @@ tasks.register('checkBuildVariants') {
             name.startsWith('com/g9third/pmweatheriv/trace/')
                 || name == 'com/g9third/pmweatheriv/PMWeatherIVDiagnostics.class'
                 || name == 'com/g9third/pmweatheriv/physics/AircraftDiagnostics.class'
-                || name.startsWith('com/g9third/pmweatheriv/client/ClientWindMonitor')
                 || name.startsWith('com/g9third/pmweatheriv/client/ClientTraceSync')
                 || name.startsWith('com/g9third/pmweatheriv/client/ClientPerformanceCapture')
                 || name.startsWith('com/g9third/pmweatheriv/network/TraceSyncNetwork')
-                || name.startsWith('com/g9third/pmweatheriv/network/WindMonitorNetwork')
                 || name.startsWith('com/g9third/pmweatheriv/devsupport/PMIVDev')
                 || name.startsWith('com/g9third/pmweatheriv/devsupport/PMIVRuntimeProbe')
                 || name == 'com/g9third/pmweatheriv/PMIVDevConfig.class'
@@ -255,6 +263,9 @@ tasks.register('checkBuildVariants') {
             'com/g9third/pmweatheriv/physics/RoadVehiclePhysics.class',
             'com/g9third/pmweatheriv/physics/RotorModel.class',
             'com/g9third/pmweatheriv/network/AircraftStateNetwork.class',
+            'com/g9third/pmweatheriv/network/WindMonitorNetwork.class',
+            'com/g9third/pmweatheriv/network/WindSamplePosition.class',
+            'com/g9third/pmweatheriv/client/ClientWindMonitor.class',
             'com/g9third/pmweatheriv/sable/SableVehicleManager.class',
             'com/g9third/pmweatheriv/sable/SableCollisionGameplay.class',
             'com/g9third/pmweatheriv/terrain/trueimpact/IntegratedImpactTerrain.class',

@@ -5,6 +5,7 @@ import com.g9third.pmweatheriv.network.WindMonitorNetwork;
 import com.g9third.pmweatheriv.physics.Vec3d;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import java.lang.reflect.Method;
 import java.util.Locale;
 import minecrafttransportsimulator.entities.components.AEntityB_Existing;
 import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
@@ -19,6 +20,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
@@ -55,6 +58,10 @@ public final class ClientWindMonitor {
     private static long lastAcceptedRequestId = Long.MIN_VALUE;
     private static String testPhase = "", testProgress = "";
     private static long testReceiptNanos;
+    private static volatile java.lang.reflect.Method clearAerowindFieldMethod;
+    private static volatile boolean clearAerowindFieldMethodResolved;
+    private static volatile Method pmaeroStructureForwardMethod;
+    private static volatile boolean pmaeroStructureForwardResolved;
 
     /** The PMIV weather test can display its current phase beside the wind reading. */
     public static void setTestStatus(String phase, String progress) {
@@ -111,8 +118,13 @@ public final class ClientWindMonitor {
     }
 
     public static void onClientTick(ClientTickEvent.Post event) {
-        Level currentLevel = Minecraft.getInstance().level;
+        Minecraft minecraft = Minecraft.getInstance();
+        Level currentLevel = minecraft.level;
         com.g9third.pmweatheriv.network.AircraftStateNetwork.resetClientLevel(currentLevel);
+        if (currentLevel == null || minecraft.player == null || minecraft.getConnection() == null) {
+            resetSamplingState();
+            return;
+        }
         if (sampledLevel != currentLevel) {
             resetSamplingState();
             sampledLevel = currentLevel;
@@ -143,7 +155,7 @@ public final class ClientWindMonitor {
     private static int reportLiveStatus() {
         sendMessage(
             "Live wind display is " + (liveMonitoring ? "enabled." : "disabled.")
-                + " Use /live wind on|off.",
+                + " Use /aerowind live on|off or /pmiv wind live on|off.",
             liveMonitoring ? ChatFormatting.GREEN : ChatFormatting.YELLOW
         );
         return 1;
@@ -163,6 +175,7 @@ public final class ClientWindMonitor {
         } else {
             sendMessage("Live wind display disabled.", ChatFormatting.YELLOW);
         }
+        com.g9third.pmweatheriv.devsupport.PMIVObserver.windMonitorLiveChanged(enabled);
         return 1;
     }
 
@@ -174,13 +187,37 @@ public final class ClientWindMonitor {
         pendingReportId = Long.MIN_VALUE;
         lastReceiptTick = Long.MIN_VALUE;
         WindMonitorNetwork.clearClientReading();
+        clearAerowindTestField();
         testPhase = testProgress = "";
     }
 
-    /**
-     * Ask the logical server to sample PMAero atmosphere at this player's eye position.
-     * This is the same source-native PMWeather path and common config used by aircraft physics.
-     */
+    private static void clearAerowindTestField() {
+        java.lang.reflect.Method method = clearAerowindFieldMethod;
+        if (!clearAerowindFieldMethodResolved) {
+            synchronized (ClientWindMonitor.class) {
+                if (!clearAerowindFieldMethodResolved) {
+                    try {
+                        Class<?> test = Class.forName("com.axes.pmweather_aeronautics.AerowindTest", false,
+                            ClientWindMonitor.class.getClassLoader());
+                        clearAerowindFieldMethod = test.getMethod("clearClientField");
+                    } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                        clearAerowindFieldMethod = null;
+                    }
+                    clearAerowindFieldMethodResolved = true;
+                }
+                method = clearAerowindFieldMethod;
+            }
+        }
+        if (method != null) {
+            try {
+                method.invoke(null);
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                // PMAero test fields are optional client state.
+            }
+        }
+    }
+
+    /** Ask the logical server for a cached, Sable/world-resolved rider sample. */
     private static boolean requestAuthoritativeWind(boolean force) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null || minecraft.level == null || minecraft.getConnection() == null) {
@@ -313,7 +350,7 @@ public final class ClientWindMonitor {
             ? "WIND  calm"
             : String.format(Locale.ROOT, "WIND  %.1f mph  FROM %s", reading.totalSpeedMph(), reading.fromCardinal());
         String vertical = compactVerticalLabel(reading.effectiveMph().y());
-        String referenceLabel = reference.aircraftRelative() ? "AIR" : "VIEW";
+        String referenceLabel = reference.vehicleRelative() ? "VEH" : "VIEW";
         String sourceSuffix = reading.authoritativeServer() ? "" : "  LOCAL";
         String secondary = reading.calm()
             ? referenceLabel + sourceSuffix
@@ -336,8 +373,8 @@ public final class ClientWindMonitor {
      * IV intentionally lets the rider's head/camera yaw differ from the vehicle
      * heading. Using vanilla player yaw while seated can therefore rotate the
      * live wind diagram by tens of degrees (or even roughly 90 degrees) relative
-     * to an Aeronautics aircraft structure. Prefer the actual IV aircraft yaw
-     * when riding one of its seats; other vehicles retain player/view-relative HUD.
+     * to a vehicle structure. Prefer the world-space IV vehicle yaw, then use
+     * PMAero's cached generic seat/sub-level heading. Walking uses view yaw.
      */
     private static HorizontalReference horizontalReference(Player minecraftPlayer) {
         try {
@@ -348,12 +385,9 @@ public final class ClientWindMonitor {
                     : wrapperPlayer.getEntityRiding();
                 if (riding instanceof PartSeat seat) {
                     EntityVehicleF_Physics vehicle = seat.vehicleOn;
-                    if (vehicle != null && vehicle.definition != null
-                        && vehicle.definition.motorized != null && vehicle.definition.motorized.isAircraft
-                        && vehicle.orientation != null
+                    if (vehicle != null && vehicle.orientation != null
                         && Double.isFinite(vehicle.orientation.angles.y)) {
-                        // IV positive body yaw is opposite vanilla Minecraft's
-                        // getYRot convention used by relativeToPlayer().
+                        // SableVehicleBody reports this orientation in world space.
                         return new HorizontalReference(-vehicle.orientation.angles.y, true);
                     }
                 }
@@ -362,7 +396,43 @@ public final class ClientWindMonitor {
             // The wind HUD is diagnostic-only. A transient IV client-wrapper
             // lifecycle race must never make the HUD or client tick fail.
         }
+        Vec3 structureForward = pmaeroStructureForward(minecraftPlayer);
+        if (structureForward != null) {
+            double yaw = Math.toDegrees(Math.atan2(-structureForward.x, structureForward.z));
+            if (Double.isFinite(yaw)) return new HorizontalReference(yaw, true);
+        }
         return new HorizontalReference(minecraftPlayer.getYRot(), false);
+    }
+
+    private static Vec3 pmaeroStructureForward(Player player) {
+        Method method = pmaeroStructureForwardMethod();
+        if (method == null) return null;
+        try {
+            Object result = method.invoke(null, player);
+            if (!(result instanceof Vec3 direction)
+                || !Double.isFinite(direction.x) || !Double.isFinite(direction.z)) return null;
+            double length = Math.hypot(direction.x, direction.z);
+            return length > 1.0e-6 ? new Vec3(direction.x / length, 0.0, direction.z / length) : null;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            return null;
+        }
+    }
+
+    private static Method pmaeroStructureForwardMethod() {
+        if (pmaeroStructureForwardResolved) return pmaeroStructureForwardMethod;
+        synchronized (ClientWindMonitor.class) {
+            if (pmaeroStructureForwardResolved) return pmaeroStructureForwardMethod;
+            pmaeroStructureForwardResolved = true;
+            try {
+                if (!ModList.get().isLoaded("pmweather_aeronautics")) return null;
+                Class<?> helper = Class.forName("com.axes.pmweather_aeronautics.WindSamplePosition", false,
+                    ClientWindMonitor.class.getClassLoader());
+                pmaeroStructureForwardMethod = helper.getMethod("structureForward", Player.class);
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                pmaeroStructureForwardMethod = null;
+            }
+            return pmaeroStructureForwardMethod;
+        }
     }
 
 
@@ -492,7 +562,7 @@ public final class ClientWindMonitor {
         private static final RelativeDirection ZERO = new RelativeDirection(0.0, 0.0);
     }
 
-    private record HorizontalReference(double yawDegrees, boolean aircraftRelative) {
+    private record HorizontalReference(double yawDegrees, boolean vehicleRelative) {
     }
 
     private record WindReading(

@@ -152,7 +152,7 @@ public final class SableModelCollisionHull {
                                                    AnimatedObjectClassification classification) {
         if (mesh == null || mesh.isLines) return false;
         String name = normalize(mesh.name);
-        return !name.startsWith("$") && classification.physicalTransformNames().contains(name)
+        return classification.physicalTransformNames().contains(name)
             && !classification.damageReplacementNames().contains(name)
             && aerodynamicIgnoreReason(name, mesh.isTranslucent) == IgnoreReason.NONE
             && rigidAnimationChain(name, definitions, new HashSet<>());
@@ -325,12 +325,12 @@ public final class SableModelCollisionHull {
                     continue;
                 }
                 boolean damageReplacement = animationObjects.damageReplacementNames().contains(normalized);
-                if (damageReplacement || normalized.startsWith("$")) {
+                if (damageReplacement) {
                     ++skippedAnimatedObjects;
                     if (damageReplacement) ++skippedDamageReplacementObjects;
                     continue;
                 }
-                IgnoreReason ignore = aerodynamicIgnoreReason(normalized, object.isTranslucent);
+                IgnoreReason ignore = bodyPressureIgnoreReason(object, animationObjects);
                 if (ignore != IgnoreReason.NONE) {
                     if (ignore == IgnoreReason.GEAR_OR_MOVING_HARDWARE) ++skippedGearObjects;
                     else ++skippedRenderObjects;
@@ -486,7 +486,7 @@ public final class SableModelCollisionHull {
                 }
                 boolean physicalAnimated = animationObjects.physicalTransformNames().contains(normalized);
                 boolean damageReplacement = animationObjects.damageReplacementNames().contains(normalized);
-                if (physicalAnimated || damageReplacement || normalized.startsWith("$")) {
+                if (physicalAnimated || damageReplacement) {
                     ++skippedAnimatedObjects;
                     if (physicalAnimated) ++skippedPhysicalAnimatedObjects;
                     if (damageReplacement) ++skippedDamageReplacementObjects;
@@ -497,9 +497,9 @@ public final class SableModelCollisionHull {
                     // the rigid body. Keep intact wings/tails in the physical shell.
                     ++retainedVisibilityOnlyAnimatedObjects;
                 }
-                IgnoreReason ignore = includeStaticGroundSupport && isStaticGroundSupport(normalized)
-                    ? IgnoreReason.NONE
-                    : aerodynamicIgnoreReason(normalized, object.isTranslucent);
+                IgnoreReason ignore = staticCollisionIgnoreReason(
+                    object, animationObjects, includeStaticGroundSupport
+                );
                 if (ignore != IgnoreReason.NONE) {
                     if (ignore == IgnoreReason.GEAR_OR_MOVING_HARDWARE) {
                         ++skippedGearObjects;
@@ -1232,6 +1232,27 @@ public final class SableModelCollisionHull {
 
     private static boolean isStaticGroundSupport(String name) {
         return containsAny(name, "skid", "float", "pontoon");
+    }
+
+    private static IgnoreReason bodyPressureIgnoreReason(
+        Mesh mesh, AnimatedObjectClassification classification
+    ) {
+        if (mesh == null || mesh.isLines) return IgnoreReason.RENDER_ONLY;
+        String name = normalize(mesh.name);
+        if (classification.damageReplacementNames().contains(name)) return IgnoreReason.RENDER_ONLY;
+        return aerodynamicIgnoreReason(name, mesh.isTranslucent);
+    }
+
+    private static IgnoreReason staticCollisionIgnoreReason(
+        Mesh mesh, AnimatedObjectClassification classification, boolean includeStaticGroundSupport
+    ) {
+        if (mesh == null || mesh.isLines) return IgnoreReason.RENDER_ONLY;
+        String name = normalize(mesh.name);
+        if (classification.physicalTransformNames().contains(name)
+            || classification.damageReplacementNames().contains(name)) return IgnoreReason.RENDER_ONLY;
+        return includeStaticGroundSupport && isStaticGroundSupport(name)
+            ? IgnoreReason.NONE
+            : aerodynamicIgnoreReason(name, mesh.isTranslucent);
     }
 
     private static IgnoreReason aerodynamicIgnoreReason(String name, boolean translucent) {

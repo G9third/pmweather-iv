@@ -31,6 +31,7 @@ import org.joml.Vector3dc;
 public final class PMIVObserver {
     private static final Observer NO_OP = new Observer() {};
     private static volatile Observer observer = NO_OP;
+    private static volatile ClientProvider clientProvider;
     private static volatile boolean commonInitialized;
     private static volatile boolean clientInitialized;
 
@@ -71,12 +72,21 @@ public final class PMIVObserver {
             ClientProvider provider = ServiceLoader.load(
                 ClientProvider.class, PMIVObserver.class.getClassLoader()
             ).findFirst().orElse(null);
-            if (provider != null) provider.initialize(modBus, modContainer);
+            if (provider != null) {
+                clientProvider = provider;
+                provider.initialize(modBus, modContainer);
+            }
         } catch (RuntimeException | ServiceConfigurationError | LinkageError unavailable) {
             // Dev-only client tools are optional and have no gameplay authority.
             System.err.println("[PMWeather-IV] Optional development client observer initialization failed: "
                 + unavailable.getClass().getName() + ": " + String.valueOf(unavailable.getMessage()));
         }
+    }
+
+    /** Optional private diagnostics hook for changes to the promoted wind monitor. */
+    public static void windMonitorLiveChanged(boolean enabled) {
+        ClientProvider provider = clientProvider;
+        if (provider != null) provider.onWindMonitorLiveChanged(enabled);
     }
 
     public static void capturePerformance(UUID vehicleUuid, String stage, long elapsedNanos) {
@@ -197,6 +207,7 @@ public final class PMIVObserver {
     /** Client service has a separate provider so dedicated servers never link dev client classes. */
     public interface ClientProvider {
         void initialize(IEventBus modBus, ModContainer modContainer);
+        default void onWindMonitorLiveChanged(boolean enabled) {}
     }
 
     /** Typed hooks receive physical values already computed by the production core. */

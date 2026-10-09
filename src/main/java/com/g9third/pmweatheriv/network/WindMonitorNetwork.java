@@ -46,8 +46,10 @@ public final class WindMonitorNetwork {
         if (!(context.player() instanceof ServerPlayer player)) return;
         long tick = player.level().getGameTime();
         CachedReading cached = SERVER.get(player);
-        if (cached == null || cached.level() != player.serverLevel() || cached.tick() != tick) {
-            double[] xyz = {player.getX(), player.getEyeY(), player.getZ()};
+        if (cached == null || cached.level() != player.serverLevel() || tick - cached.tick() >= 2L
+            || tick < cached.tick()) {
+            net.minecraft.world.phys.Vec3 samplePoint = WindSamplePosition.exposedWorldPoint(player.serverLevel(), player);
+            double[] xyz = {samplePoint.x, samplePoint.y, samplePoint.z};
             double[] output = new double[PMAeroBridge.WIND_STRIDE];
             boolean valid = true;
             try { PMAeroBridge.sampleAircraftAtmosphereInto(player.serverLevel(), xyz, output); }
@@ -58,6 +60,10 @@ public final class WindMonitorNetwork {
         }
         context.reply(new ReadingPayload(request.requestId(), tick,
             cached.wind().x(), cached.wind().y(), cached.wind().z(), cached.valid()));
+    }
+
+    public static void onServerStopping(net.neoforged.neoforge.event.server.ServerStoppingEvent event) {
+        SERVER.clear();
     }
 
     private static void handleReading(ReadingPayload payload, IPayloadContext context) {

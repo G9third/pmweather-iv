@@ -825,13 +825,18 @@ public final class LandingGearSolver {
         if (vehicle == null) {
             return 0.0;
         }
-        double service = Double.isFinite(vehicle.brakeVar.currentValue)
-            ? Vec3d.clamp(Math.abs(vehicle.brakeVar.currentValue), 0.0, 1.0)
+        return landingGearBrakeCommand(vehicle.brakeVar.currentValue,
+            vehicle.parkingBrakeVar.isActive, vehicle.parkingBrakeVar.currentValue);
+    }
+
+    static double landingGearBrakeCommand(double serviceValue, boolean parkingActive, double parkingValue) {
+        double service = Double.isFinite(serviceValue)
+            ? Vec3d.clamp(Math.abs(serviceValue), 0.0, 1.0)
             : 0.0;
-        double parking = vehicle.parkingBrakeVar.isActive
+        double parking = parkingActive
             ? 1.0
-            : Double.isFinite(vehicle.parkingBrakeVar.currentValue)
-                ? Vec3d.clamp(Math.abs(vehicle.parkingBrakeVar.currentValue), 0.0, 1.0)
+            : Double.isFinite(parkingValue)
+                ? Vec3d.clamp(Math.abs(parkingValue), 0.0, 1.0)
                 : 0.0;
         return Math.max(service, parking);
     }

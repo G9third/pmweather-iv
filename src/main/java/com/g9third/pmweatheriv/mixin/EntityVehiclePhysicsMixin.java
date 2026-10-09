@@ -28,7 +28,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class EntityVehiclePhysicsMixin implements GroundVehicleWindStateAccess, AircraftStateAccess {
     @Unique private final AircraftState pmweatherIv$flightState = new AircraftState();
     @Unique private final GroundVehicleWind.State pmweatherIv$groundWindState = new GroundVehicleWind.State();
-    @Unique private boolean pmweatherIv$placementParkingBrakeHandled;
 
     @Override
     public AircraftState pmweatherIv$getAircraftState() {
@@ -44,34 +43,6 @@ public abstract class EntityVehiclePhysicsMixin implements GroundVehicleWindStat
     private void pmweatherIv$replaceManagedVehicleModel(CallbackInfo callbackInfo) {
         EntityVehicleF_Physics vehicle = (EntityVehicleF_Physics) (Object) this;
         PMWeatherIVConfig.Values config = PMWeatherIVConfig.get();
-
-        // Any aircraft entity created through IV's player item-placement path begins
-        // with IV's parking brake engaged.  ItemVehicle passes the placing player for
-        // both brand-new vehicle items and saved/reassembled vehicle NBT, while normal
-        // world/chunk restoration constructs the entity with a null placing player.
-        // Do not gate this on ticksExisted: restored vehicle items may carry mature
-        // state even though this entity instance has just been placed.  This remains a
-        // one-shot IV parking-brake default (the same p_brake state toggled by N), not
-        // a persistent PMIV constraint; the player may release it immediately.
-        if (!pmweatherIv$placementParkingBrakeHandled
-            && !vehicle.world.isClient()
-            && vehicle.definition != null
-            && vehicle.definition.motorized != null
-            && vehicle.definition.motorized.isAircraft
-            && !vehicle.definition.motorized.isBlimp
-            && ((EntityVehicleMovingAccessor) vehicle).pmweatherIv$getPlacingPlayer() != null) {
-            pmweatherIv$placementParkingBrakeHandled = true;
-            if (config.enabled()) {
-                vehicle.parkingBrakeVar.setActive(true, true);
-                if (PMIVObserver.loggingEnabled()) {
-                    PMIVObserver.log(
-                    "AIRCRAFT_INITIAL_PARKING_BRAKE uuid=" + vehicle.uniqueUUID
-                        + " applied=true source=PLAYER_ITEM_PLACEMENT_INCLUDING_SAVED_STATE"
-                        + " control=IV_P_BRAKE_N"
-                );
-                }
-            }
-        }
 
         if ((!vehicle.world.isClient() ? !config.enabled()
                 : !com.g9third.pmweatheriv.network.AircraftStateNetwork.managed(vehicle))

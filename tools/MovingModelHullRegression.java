@@ -46,6 +46,64 @@ public final class MovingModelHullRegression {
         Method eligible=method(SableModelCollisionHull.class,"eligibleMovingExterior",3);
         for(String name:List.of("body_frame","door_skin"))require((boolean)eligible.invoke(null,mesh(name),definitions,classified),"moving exterior retained "+name);
         for(String name:List.of("cycle","bad","scale","wheel","headlight"))require(!(boolean)eligible.invoke(null,mesh(name),definitions,classified),"unsupported/hardware excluded "+name);
+
+        var wingR=object("$wingr",null,AnimationComponentType.ROTATION);
+        var wingRAnimation=wingR.animations.get(0);
+        wingRAnimation.variable="flaps_actual";
+        wingRAnimation.centerPoint=new Point3D(-2.5048,.92311,.55271);
+        wingRAnimation.axis=new Point3D(0,1,0);
+        var wingL=object("$wingl",null,AnimationComponentType.ROTATION);
+        var wingLAnimation=wingL.animations.get(0);
+        wingLAnimation.variable="flaps_actual";
+        wingLAnimation.centerPoint=new Point3D(2.5048,.92311,.55271);
+        wingLAnimation.axis=new Point3D(0,-1,0);
+        var damagedWing=object("$winglDT",null,AnimationComponentType.ROTATION);
+        var damageGate=new JSONAnimationDefinition();
+        damageGate.animationType=AnimationComponentType.VISIBILITY;
+        damageGate.variable="damage";damageGate.clampMin=180;damageGate.clampMax=200;
+        damagedWing.animations=List.of(damagedWing.animations.get(0),damageGate);
+        Map<String,JSONAnimatedObject> prefixedDefinitions=new LinkedHashMap<>();
+        for(var item:List.of(wingR,wingL,damagedWing,
+            object("$headlight",null,AnimationComponentType.ROTATION),
+            object("$lamp",null,AnimationComponentType.ROTATION),
+            object("$lightbar",null,AnimationComponentType.ROTATION),
+            object("$interior_stick",null,AnimationComponentType.ROTATION),
+            object("#light",null,AnimationComponentType.ROTATION),
+            object("&light",null,AnimationComponentType.ROTATION)))
+            prefixedDefinitions.put(item.objectName.toLowerCase(Locale.ROOT),item);
+        var prefixedClassification=classify.invoke(null,prefixedDefinitions);
+        for(String name:List.of("$wingr","$wingl"))
+            require((boolean)eligible.invoke(null,mesh(name,new Vec3d(0,0,0),new Vec3d(4,0,0),new Vec3d(4,0,-3)),
+                prefixedDefinitions,prefixedClassification),"physical prefixed wing enters moving collision eligibility: "+name);
+        for(String name:List.of("$winglDT","$headlight","$lamp","$lightbar","$interior_stick","#light","&light"))
+            require(!(boolean)eligible.invoke(null,mesh(name,new Vec3d(0,0,0),new Vec3d(1,0,0),new Vec3d(1,0,1)),
+                prefixedDefinitions,prefixedClassification),"damage/decorative semantics remain excluded: "+name);
+
+        Method pressureReason=method(SableModelCollisionHull.class,"bodyPressureIgnoreReason",2);
+        Method staticReason=method(SableModelCollisionHull.class,"staticCollisionIgnoreReason",3);
+        require("NONE".equals(String.valueOf(pressureReason.invoke(null,mesh("$wingr"),prefixedClassification))),
+            "moving prefixed wing contributes to body-pressure exterior geometry");
+        require("RENDER_ONLY".equals(String.valueOf(staticReason.invoke(null,mesh("$wingr"),prefixedClassification,false))),
+            "moving wing remains out of rigid static shell by animation classification");
+        require("NONE".equals(String.valueOf(pressureReason.invoke(null,mesh("$fuselage"),prefixedClassification))),
+            "ordinary prefixed fuselage remains eligible for body pressure");
+        require("NONE".equals(String.valueOf(staticReason.invoke(null,mesh("$fuselage"),prefixedClassification,false))),
+            "ordinary prefixed fuselage remains eligible for static shell");
+        require("RENDER_ONLY".equals(String.valueOf(pressureReason.invoke(null,mesh("$winglDT"),prefixedClassification))),
+            "damage replacement stays out of body-pressure geometry");
+        require("RENDER_ONLY".equals(String.valueOf(staticReason.invoke(null,mesh("$winglDT"),prefixedClassification,false))),
+            "damage replacement stays out of static collision shell");
+
+        Method buildMoving=method(SableModelCollisionHull.class,"buildMovingObjectHull",4);
+        var syntheticWing=mesh("$wingr",new Vec3d(0,0,0),new Vec3d(4,0,0),new Vec3d(4,0,-3),
+            new Vec3d(0,0,0),new Vec3d(4,0,-3),new Vec3d(0,0,-3));
+        var syntheticWingHull=(SableModelCollisionHull.PreparedMovingObjectHull)buildMoving.invoke(null,syntheticWing,1.,1.,1.);
+        require(syntheticWingHull!=null&&!syntheticWingHull.boxes().isEmpty(),
+            "physical prefixed wing rasterizes into a moving collision hull");
+        require(syntheticWingHull.objectName().equals("$wingr")&&syntheticWingHull.sourceTriangles()==2,
+            "prefixed wing collision hull preserves source identity and triangles");
+        assertRigidPoseTracksWingHinge();
+
         Method signature=SableModelCollisionHull.class.getDeclaredMethod("animationSignature",Map.class);signature.setAccessible(true);
         String rigid=(String)signature.invoke(null,Map.of("panel",object("panel",null,AnimationComponentType.ROTATION)));
         String scaled=(String)signature.invoke(null,Map.of("panel",object("panel",null,AnimationComponentType.SCALING)));
@@ -67,6 +125,32 @@ public final class MovingModelHullRegression {
         long sourceTopology=(long)includeSource.invoke(null,17L,originalModelKey);
         long replacementTopology=(long)includeSource.invoke(null,17L,replacementModelKey);
         require(sourceTopology!=replacementTopology,"same-named collider child rebuilds for changed model source");
+    }
+    private static void assertRigidPoseTracksWingHinge()throws Exception {
+        Method relative=method(Class.forName("com.g9third.pmweatheriv.sable.SableCompoundCollider"),
+            "movingModelRelativePose",2);
+        Vec3d hinge=new Vec3d(-2.5048,.92311,.55271),tip=new Vec3d(-6.4,.8,.8);
+        var authored=rotationAboutY(hinge,0.0);
+        var deflected=rotationAboutY(hinge,Math.toRadians(27));
+        Object authoredPose=relative.invoke(null,authored,new Vector3d());
+        Object deflectedPose=relative.invoke(null,deflected,new Vector3d());
+        Vector3d authoredPoint=posedPoint(authoredPose,tip);
+        Vector3d deflectedPoint=posedPoint(deflectedPose,tip);
+        vectorNear(new Vector3d(hinge.x(),hinge.y(),hinge.z()),posedPoint(deflectedPose,hinge),1e-9,
+            "live wing rotation keeps its authored hinge fixed");
+        require(authoredPoint.distance(deflectedPoint)>.5,
+            "moving collision pose follows a changed live wing rotation around its hinge");
+    }
+    private static RigidTransform rotationAboutY(Vec3d pivot,double angle) {
+        double c=Math.cos(angle),s=Math.sin(angle);
+        Vec3d translatedPivot=new Vec3d(c*pivot.x()+s*pivot.z(),pivot.y(),-s*pivot.x()+c*pivot.z());
+        Vec3d translation=pivot.subtract(translatedPivot);
+        return new RigidTransform(c,0,s,0,1,0,-s,0,c,translation);
+    }
+    private static Vector3d posedPoint(Object pose,Vec3d point)throws Exception {
+        Vector3d position=new Vector3d((Vector3d)method(pose.getClass(),"position",0).invoke(pose));
+        Quaterniond orientation=new Quaterniond((Quaterniond)method(pose.getClass(),"orientation",0).invoke(pose));
+        return orientation.transform(new Vector3d(point.x(),point.y(),point.z())).add(position);
     }
     private static void raster()throws Exception {
         Vec3d a=new Vec3d(-1,0,-2),b=new Vec3d(1,0,-2),c=new Vec3d(1,0,2),d=new Vec3d(-1,0,2);
@@ -263,13 +347,14 @@ public final class MovingModelHullRegression {
                 for(int i=1;i<indices.length-1;i++){points.add(vertices.get(indices[0]));points.add(vertices.get(indices[i]));points.add(vertices.get(indices[i+1]));}
             }
         }
-        int retained=0,totalBoxes=0,totalSamples=0;
+        int retained=0,totalBoxes=0,totalSamples=0;Set<String> retainedNames=new HashSet<>();
         for(var entry:objects.entrySet()) {
             Mesh mesh=mesh(entry.getKey(),entry.getValue().toArray(Vec3d[]::new));
             if(!(boolean)eligible.invoke(null,mesh,definitions,classification))continue;
             var hull=(SableModelCollisionHull.PreparedMovingObjectHull)build.invoke(null,mesh,1.,1.,1.);
             require(hull!=null&&!hull.boxes().isEmpty(),"eligible real model has bounded hull "+entry.getKey());
-            ++retained;totalBoxes+=hull.boxes().size();int samples=0;
+            ++retained;retainedNames.add(entry.getKey().toLowerCase(Locale.ROOT));
+            totalBoxes+=hull.boxes().size();int samples=0;
             List<Vec3d> points=entry.getValue();
             for(int i=0;i+2<points.size();i+=3) {
                 Vec3d a=points.get(i),b=points.get(i+1),c=points.get(i+2);
@@ -282,6 +367,14 @@ public final class MovingModelHullRegression {
             }
             totalSamples+=samples;
             System.out.println("Moving exterior object "+entry.getKey()+": sourceTriangles="+hull.sourceTriangles()+", boxes="+hull.boxes().size()+", resolution="+hull.resolution()+", coveredSamples="+samples);
+        }
+        if(objects.containsKey("$wingl")&&objects.containsKey("$wingr")) {
+            require(retainedNames.contains("$wingl")&&retainedNames.contains("$wingr"),
+                "real model's intact prefixed left and right wings enter moving exterior hulls");
+            for(String damagedName:List.of("$wingldt","$wingrd"))
+                if(objects.keySet().stream().anyMatch(meshName->meshName.equalsIgnoreCase(damagedName)))
+                    require(!retainedNames.contains(damagedName),
+                        "real model damage replacement stays excluded: "+damagedName);
         }
         require(retained>0,"real fixture exercises moving exterior");
         System.out.println("External moving model: objects="+retained+", boxes="+totalBoxes+", samples="+totalSamples+" (reference scale1; no live native matrices)");

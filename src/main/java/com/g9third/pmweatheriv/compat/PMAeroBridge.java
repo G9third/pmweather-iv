@@ -3,6 +3,8 @@ package com.g9third.pmweatheriv.compat;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import org.joml.Vector3d;
 import com.g9third.pmweatheriv.physics.Vec3d;
 
 /** Required PMAero 1.0 packed API. Failures stop the load update; no second physics law exists. */
@@ -13,6 +15,8 @@ public final class PMAeroBridge {
     private static final MethodHandle WIND;
     private static final MethodHandle BODY;
     private static final MethodHandle LIFT;
+    private static volatile MethodHandle PARTICLE_WIND;
+    private static volatile boolean particleWindResolved;
 
     static {
         try {
@@ -45,6 +49,36 @@ public final class PMAeroBridge {
 
     private PMAeroBridge() {}
     public static void requireApis() { /* Class initialization validates all three APIs. */ }
+
+    /** Optional client-only particle bridge; unavailable PMAero client classes leave motion untouched. */
+    public static boolean applyClientParticleWind(Level level, Object identity,
+            double x, double y, double z, Vector3d velocity, double response) {
+        if (level == null || !level.isClientSide || identity == null || velocity == null) return false;
+        MethodHandle bridge = particleWindHandle();
+        if (bridge == null) return false;
+        try {
+            return (boolean) bridge.invokeExact(level, identity, x, y, z, velocity, response);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static MethodHandle particleWindHandle() {
+        if (particleWindResolved) return PARTICLE_WIND;
+        synchronized (PMAeroBridge.class) {
+            if (particleWindResolved) return PARTICLE_WIND;
+            particleWindResolved = true;
+            try {
+                ClassLoader loader = PMAeroBridge.class.getClassLoader();
+                Class<?> client = Class.forName("com.axes.pmweather_aeronautics.ParticleWindClient", false, loader);
+                PARTICLE_WIND = MethodHandles.publicLookup().unreflect(client.getMethod("applyParticleWind",
+                    Level.class, Object.class, double.class, double.class, double.class, Vector3d.class, double.class));
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                PARTICLE_WIND = null;
+            }
+            return PARTICLE_WIND;
+        }
+    }
 
     public static void sampleAircraftAtmosphereInto(ServerLevel level, double[] xyz, double[] output) {
         try {
