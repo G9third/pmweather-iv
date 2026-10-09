@@ -14,7 +14,7 @@ With PMWeather Aeronautics installed, use `/pmiv wind` for a reading and `/pmiv 
 
 Start the repeatable weather sequence with `/pmiv weather test start` or `/aerowind test start`. The `stress`, `status`, `next`, `stop` and `list` subcommands are available under `/pmiv weather test`. PMIV forwards these commands to PMAero, which supplies the authoritative test wind. Test commands require operator permission on the server. The default flight sequence runs 16 phases for 15 seconds each (4 minutes); the full test is capped at 5 minutes.
 
-[Watch full weather test cycle](https://streamable.com/fomjry)
+[Watch full weather test cycle](https://www.youtube.com/watch?v=pCM3C3d09k0)
 
 ## Build
 
