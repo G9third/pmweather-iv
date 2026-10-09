@@ -1,5 +1,7 @@
 # PMWeather-IV 0.12.0
 
+**Quick control:** Press **Right Alt** while seated in an aircraft to toggle auto trim. Its compact status badge appears while active and shows whether it is learning, assisting, paused, or limited.
+
 Standalone Immersive Vehicles addon connecting ground vehicles and aircraft to PMWeather Aeronautics and persistent Sable/Rapier physics.
 
 Ground vehicles share aircraft body collision, terrain recovery and integrated True Impact handling. IV retains drivetrain, controls and content-pack tire coefficients; road drive/braking acts through physical load-bounded tire contacts. Eligible road wheels and treads use a bounded series tire/suspension travel model unless the pack already authors vertical support motion. Compatibility follows authored features and geometry. Helicopters retain the assisted controller.
