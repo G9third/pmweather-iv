@@ -10,13 +10,21 @@ implementation.
 - Project: **True Impact**
 - Upstream author/project owner: **OMEGAU371 / True Impact contributors**
 - Upstream repository: https://github.com/OMEGAU371/sable-true-impact
-- Source baseline used for this integration: **True Impact 0.5.8-delta development source**
-- Public upstream project's stated license: **LGPL-3.0-only**
+- **Upstream source baseline:** True Impact **v0.5.7-delta**, as published by OMEGAU371
+  (https://github.com/OMEGAU371/sable-true-impact/tree/v0.5.7-delta).
+- **Local PMIV-derived variant:** **0.5.8-delta**, created by modifying the 0.5.7-delta
+  source for PMIV's external rigid-body world-impact integration. This is **not an
+  upstream True Impact release or version attributed to OMEGAU371**.
+- **License of the upstream baseline:** LGPL-3.0-only, retained for the local
+  modifications and incorporated LGPL-covered portions.
 
-The integration's exact 0.5.8-delta development-source snapshot should be checked
-against the original upstream distribution or permission record before treating the
-provenance and license verification as complete. The public upstream repository's
-`v0.5.7-delta` tag does not, by itself, establish the license of a later development snapshot.
+The historical local change from 0.5.7-delta to 0.5.8-delta added an
+`ExternalWorldImpactApi` for contacts from bodies that were not ordinary Sable
+sublevels. The separately developed API and its local version identifier must
+not be confused with an upstream feature or release. The repository's source
+headers using "True Impact 0.5.8-delta" refer to this **local derivative
+snapshot**; original True Impact authors retain credit for their upstream
+code, not for PMIV's later adaptations.
 
 The incorporated portions are primarily the world-material response algorithms and support
 classes for hardness/blast-resistance thresholds, material classification, confinement,
