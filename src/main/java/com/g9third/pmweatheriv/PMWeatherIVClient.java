@@ -14,7 +14,7 @@ public final class PMWeatherIVClient {
         PMIVObserver.initializeClient(modBus, modContainer);
         modBus.addListener(AutoTrimClient::registerKeyMappings);
         modBus.addListener(com.g9third.pmweatheriv.client.ClientWindMonitor::registerCommands);
-        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(com.g9third.pmweatheriv.client.ClientWindMonitor::registerGuiLayer);
+        modBus.addListener(com.g9third.pmweatheriv.client.ClientWindMonitor::registerGuiLayer);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(com.g9third.pmweatheriv.client.ClientWindMonitor::onClientTick);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(AutoTrimClient::onClientTick);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(AutoTrimClient::renderBadge);
