@@ -1434,11 +1434,15 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             sableGravityWorld.y * timeStep,
             sableGravityWorld.z * timeStep
         );
+        boolean profileGear = PMIVObserver.isCapturing(vehicle.uniqueUUID);
+        long probeStart = profileGear ? System.nanoTime() : 0L;
         List<LandingGearSolver.LandingGearPhysicalContact> physicalContacts =
             probeLiveLandingGearContacts(
                 timeStep, temporaryPredictedLinearVelocityWorld
             );
 
+        if (profileGear) PMIVObserver.capturePerformance(vehicle.uniqueUUID,
+                "landing_gear_terrain_probe", System.nanoTime() - probeStart);
         Map<PartGroundDevice, Double> gearGameplayImpacts = new IdentityHashMap<>();
         landingGearImpactArmed.keySet().removeIf(device -> !device.isValid);
         for (APart part : vehicle.allParts) {
@@ -1458,7 +1462,10 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                     // Remove the future Rapier gravity increment used only for support.
                     // Rotation at the wheel remains part of the real touchdown speed.
                     double actualClosing = Math.max(0.0,
-                        solidContact.inwardNormalSpeedMetersPerSecond() + sableGravityWorld.y * timeStep);
+                        solidContact.inwardNormalSpeedMetersPerSecond() + timeStep * (
+                            sableGravityWorld.x * solidContact.normalWorld().x()
+                            + sableGravityWorld.y * solidContact.normalWorld().y()
+                            + sableGravityWorld.z * solidContact.normalWorld().z()));
                     gearGameplayImpacts.put(device, actualClosing);
                 }
                 landingGearImpactArmed.put(device, false);
@@ -1479,6 +1486,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             }
         }
 
+        long solveStart = profileGear ? System.nanoTime() : 0L;
         LandingGearSolver.LandingGearConstraintResult result =
             LandingGearSolver.solveLandingGearConstraints(
                 vehicle,
@@ -1502,6 +1510,8 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                     && lastLoadsGameTime != Long.MIN_VALUE && level.getGameTime()-lastLoadsGameTime<=2
                         ? cachedAircraftState.roadDrive : null
             );
+        if (profileGear) PMIVObserver.capturePerformance(vehicle.uniqueUUID,
+                "landing_gear_constraint_solve", System.nanoTime() - solveStart);
         lastSubstepLandingGear = result;
         Vector3d bodyUpWorld = cachedOrientation.transform(new Vector3d(0.0, 1.0, 0.0));
         updateRoadSuspensionTravel(result, timeStep, liveConstraintMass,
@@ -1816,14 +1826,26 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             LIVE_GEAR_PROXIMITY_METERS,
             crossingDistance + LIVE_GEAR_CONTACT_SKIN_METERS
         );
+        Vector3d wheelUp = cachedOrientation.transform(new Vector3d(0, 1, 0));
+        double wheelRadius = device != null && device.definition.ground.isWheel
+                && Double.isFinite(device.getHeight()) ? Math.max(0.0, device.getHeight() * 0.5) : 0.0;
         TerrainSupportSample support = liveTerrainSupport(
-            pointWorld.x, pointWorld.y, pointWorld.z, lookDown, allowLiquid, liquidOnly
+            pointWorld.x, pointWorld.y, pointWorld.z, lookDown, allowLiquid, liquidOnly,
+            wheelRadius
         );
         if (support == null || !Double.isFinite(support.topY())) {
             return;
         }
 
-        double gap = pointWorld.y - support.topY();
+        Vec3d normal = support.normalWorld();
+        double gap = (pointWorld.y - support.topY()) * normal.y();
+        Vec3d pointVelocity = new Vec3d(
+            predictedLinearVelocityWorld == null ? temporaryLinearVelocityWorld.x : predictedLinearVelocityWorld.x(),
+            predictedLinearVelocityWorld == null ? temporaryLinearVelocityWorld.y : predictedLinearVelocityWorld.y(),
+            predictedLinearVelocityWorld == null ? temporaryLinearVelocityWorld.z : predictedLinearVelocityWorld.z()
+        ).add(new Vec3d(rotationalVelocity.x, rotationalVelocity.y, rotationalVelocity.z));
+        double inwardVelocity = pointVelocity.dot(normal);
+        crossingDistance = Math.max(0.0, -inwardVelocity * Math.max(0.0, timeStep));
         // A float-enabled IV ground device is a buoyant support station, not a
         // rigid tire that should be projected to the fluid surface. While
         // submerged it carries a unilateral vertical reaction at its current
@@ -1832,7 +1854,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         double penetration = LiquidSupportModel.penetrationMeters(gap, liquidSupport);
         boolean predictiveCrossing =
             gap > LIVE_GEAR_CONTACT_SKIN_METERS
-                && pointVerticalVelocity < 0.0
+                && inwardVelocity < 0.0
                 && gap <= crossingDistance + LIVE_GEAR_CONTACT_SKIN_METERS;
         boolean exact = liquidSupport
             ? gap <= LIVE_GEAR_CONTACT_SKIN_METERS || predictiveCrossing
@@ -1870,21 +1892,27 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                         ? "CONTINUOUS_SKIN"
                         : "PROXIMITY_ONLY";
         Vec3d applicationLocal=pointLocal;
-        if (exact && !predictiveCrossing && !liquidSupport && roadContact == null) {
-            Vector3d correction=new Vector3d(0,-gap,0);
-            SablePoseConversions.worldToLocal(cachedOrientation,correction,correction);
-            applicationLocal=pointLocal.add(new Vec3d(correction.x,correction.y,correction.z));
-            pointWorld.y=support.topY();
+        if (exact && !predictiveCrossing && !liquidSupport) {
+            // Apply support at the measured shape point, including a rounded wheel's edge contact.
+            Vec3d surfacePoint = support.worldPoint() == null
+                    ? new Vec3d(pointWorld.x, support.topY(), pointWorld.z) : support.worldPoint();
+            Vector3d correction = new Vector3d(surfacePoint.x() - pointWorld.x,
+                    surfacePoint.y() - pointWorld.y, surfacePoint.z() - pointWorld.z);
+            SablePoseConversions.worldToLocal(cachedOrientation, correction, correction);
+            applicationLocal = pointLocal.add(new Vec3d(correction.x, correction.y, correction.z));
+            pointWorld.set(surfacePoint.x(), surfacePoint.y(), surfacePoint.z());
         }
         contacts.add(new LandingGearSolver.LandingGearPhysicalContact(
             device, applicationLocal, gap, (liquidSupport ? "FLOAT_LIQUID" : sourceMode) + '_' + state,
             penetration, exact, normalVelocityTarget,
-            Math.max(0.0, -pointVerticalVelocity),
+            Math.max(0.0, -inwardVelocity),
             new Vec3d(pointWorld.x, pointWorld.y, pointWorld.z),
             support.blockPos(), false,
             roadContact == null ? Double.NaN : RoadSuspensionModel.complianceGapMeters(
-                gap, roadContact.travelMeters(), roadContact.verticalProjection(), roadContact.sagMeters()),
-            roadContact != null
+                gap, roadContact.travelMeters(), Math.max(0.0,
+                    wheelUp.x * normal.x() + wheelUp.y * normal.y() + wheelUp.z * normal.z()),
+                roadContact.sagMeters()),
+            roadContact != null, normal
         ));
     }
 
@@ -1922,6 +1950,13 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         boolean allowLiquid,
         boolean liquidOnly
     ) {
+        return liveTerrainSupport(worldX, worldY, worldZ, lookDownMeters, allowLiquid, liquidOnly,
+                0.0);
+    }
+
+    private TerrainSupportSample liveTerrainSupport(double worldX, double worldY, double worldZ,
+            double lookDownMeters, boolean allowLiquid, boolean liquidOnly,
+            double wheelRadius) {
         if (!Double.isFinite(worldX) || !Double.isFinite(worldY)
             || !Double.isFinite(worldZ)) {
             return null;
@@ -1931,18 +1966,25 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             Math.max(0.0, lookDownMeters)
         );
         double maximumTop = worldY + LIVE_GEAR_MAX_PENETRATION_METERS;
-        int baseX = (int) Math.floor(worldX);
+        // IV already derives this lowest support point from tire axle, tilt and width.
+        // Anchor the rounded edge proxy here so ordinary top-face ride height is unchanged.
+        double centerX = worldX;
+        double centerZ = worldZ;
+        int reach = Math.max(1, (int) Math.ceil(wheelRadius));
+        int baseX = (int) Math.floor(centerX);
         int baseY = (int) Math.floor(worldY);
-        int baseZ = (int) Math.floor(worldZ);
+        int baseZ = (int) Math.floor(centerZ);
         int minimumY = (int) Math.floor(minimumTop) - 1;
-        int maximumY = (int) Math.floor(maximumTop) + 1;
+        int maximumY = (int) Math.floor(maximumTop + wheelRadius) + 1;
         double bestTop = Double.NEGATIVE_INFINITY;
         BlockPos bestBlock = null;
         boolean bestIsLiquid = false;
+        Vec3d bestNormal = new Vec3d(0, 1, 0);
+        Vec3d bestPoint = null;
         BlockPos.MutableBlockPos mutable = new BlockPos.MutableBlockPos();
 
-        for (int blockX = baseX - 1; blockX <= baseX + 1; ++blockX) {
-            for (int blockZ = baseZ - 1; blockZ <= baseZ + 1; ++blockZ) {
+        for (int blockX = baseX - reach; blockX <= baseX + reach; ++blockX) {
+            for (int blockZ = baseZ - reach; blockZ <= baseZ + reach; ++blockZ) {
                 if (allowLiquid) {
                     // A float station may already be submerged below the local
                     // search band. Find the top of the contiguous fluid column
@@ -1980,6 +2022,8 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                             bestTop = fluidTop;
                             bestBlock = new BlockPos(blockX, surfaceBlockY, blockZ);
                             bestIsLiquid = true;
+                            bestNormal = new Vec3d(0, 1, 0);
+                            bestPoint = null;
                         }
                         fluidY = surfaceBlockY + 1;
                     }
@@ -2000,13 +2044,25 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                         double maxX = blockX + localBox.maxX;
                         double minZ = blockZ + localBox.minZ;
                         double maxZ = blockZ + localBox.maxZ;
-                        if (worldX < minX - LIVE_GEAR_HORIZONTAL_EPSILON
-                            || worldX > maxX + LIVE_GEAR_HORIZONTAL_EPSILON
-                            || worldZ < minZ - LIVE_GEAR_HORIZONTAL_EPSILON
-                            || worldZ > maxZ + LIVE_GEAR_HORIZONTAL_EPSILON) {
+                        double contactX = Vec3d.clamp(centerX, minX, maxX);
+                        double contactZ = Vec3d.clamp(centerZ, minZ, maxZ);
+                        double dx = centerX - contactX, dz = centerZ - contactZ;
+                        double radialSquared = dx * dx + dz * dz;
+                        Vec3d normal = new Vec3d(0, 1, 0);
+                        double shapeTop = blockY + localBox.maxY;
+                        double top = shapeTop;
+                        if (wheelRadius > 1.0e-4) {
+                            // Sphere/voxel support gives a real edge normal rather than a fitted terrain slope.
+                            // Ordinary top-face contact is unchanged; wheel radius comes from the content pack.
+                            double riseSquared = wheelRadius * wheelRadius - radialSquared;
+                            if (riseSquared <= 1.0e-12) continue;
+                            double rise = Math.sqrt(riseSquared);
+                            normal = new Vec3d(dx, rise, dz).normalized();
+                            if (normal.y() < 0.1) continue;
+                            top += rise - wheelRadius;
+                        } else if (radialSquared > LIVE_GEAR_HORIZONTAL_EPSILON * LIVE_GEAR_HORIZONTAL_EPSILON) {
                             continue;
                         }
-                        double top = blockY + localBox.maxY;
                         if (top < minimumTop - LIVE_GEAR_CONTACT_SKIN_METERS
                             || top > maximumTop + LIVE_GEAR_CONTACT_SKIN_METERS) {
                             continue;
@@ -2016,12 +2072,15 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                             bestTop = top;
                             bestBlock = new BlockPos(blockX, blockY, blockZ);
                             bestIsLiquid = false;
+                            bestNormal = normal;
+                            bestPoint = new Vec3d(contactX, shapeTop, contactZ);
                         }
                     }
                 }
             }
         }
-        return bestBlock == null ? null : new TerrainSupportSample(bestTop, bestBlock, bestIsLiquid);
+        return bestBlock == null ? null : new TerrainSupportSample(bestTop, bestBlock, bestIsLiquid,
+                bestNormal, bestPoint);
     }
 
     /**
@@ -2072,7 +2131,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         }
 
         double effectiveMass = landingGearNormalEffectiveMass(
-            contact.pointLocal(), liveConstraintMass, liveConstraintInertia
+            contact.pointLocal(), contact.normalWorld(), liveConstraintMass, liveConstraintInertia
         );
         if (!(effectiveMass > 0.0) || !Double.isFinite(effectiveMass)) {
             return contact;
@@ -2105,7 +2164,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             new Vector3d(
                 contact.worldPoint().x(), contact.worldPoint().y(), contact.worldPoint().z()
             ),
-            new Vector3d(0.0, 1.0, 0.0),
+            new Vector3d(contact.normalWorld().x(), contact.normalWorld().y(), contact.normalWorld().z()),
             projectedAreaM2, rigidStopImpulseNs, inwardSpeed, maxTravelMeters
         );
         if (resolution == null || !resolution.accepted()) {
@@ -2113,7 +2172,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         }
 
         double residualInwardSpeed = Math.max(0.0, resolution.residualInwardSpeedMps());
-        double targetVerticalSpeed = -residualInwardSpeed;
+        double targetNormalSpeed = -residualInwardSpeed;
         if (PMIVObserver.loggingEnabled()) PMIVObserver.log(
             "SABLE_LANDING_GEAR_TRUE_IMPACT gameTime=" + level.getGameTime()
                 + " uuid=" + vehicle.uniqueUUID
@@ -2133,11 +2192,11 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                 + " seedBlock=" + contact.supportBlock()
                 + " momentumAuthority=SABLE_TARGET_RESIDUAL_POINT_SPEED"
         );
-        return contact.withTrueImpactResidual(targetVerticalSpeed);
+        return contact.withTrueImpactResidual(targetNormalSpeed);
     }
 
     private double landingGearNormalEffectiveMass(
-        Vec3d pointLocal, double liveConstraintMass, Vec3d liveConstraintInertia
+        Vec3d pointLocal, Vec3d normalWorld, double liveConstraintMass, Vec3d liveConstraintInertia
     ) {
         if (pointLocal == null || !pointLocal.isFinite()
             || !(liveConstraintMass > 0.0) || liveConstraintInertia == null
@@ -2145,7 +2204,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             return Double.NaN;
         }
         Vec3d leverLocal = pointLocal.subtract(centerOfMassLocal);
-        Vector3d directionBodyVector = new Vector3d(0.0, 1.0, 0.0);
+        Vector3d directionBodyVector = new Vector3d(normalWorld.x(), normalWorld.y(), normalWorld.z());
         new Quaterniond(cachedOrientation).conjugate().transform(directionBodyVector);
         Vec3d directionBody = new Vec3d(
             directionBodyVector.x, directionBodyVector.y, directionBodyVector.z
@@ -2164,7 +2223,8 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             && contact.contactMode().startsWith("FLOAT_LIQUID_");
     }
 
-    private record TerrainSupportSample(double topY, BlockPos blockPos, boolean liquid) {
+    private record TerrainSupportSample(double topY, BlockPos blockPos, boolean liquid,
+                                        Vec3d normalWorld, Vec3d worldPoint) {
     }
 
     /**

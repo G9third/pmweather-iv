@@ -56,8 +56,8 @@ public final class AircraftWind {
             for (Vec3d point : requested.values()) unique.computeIfAbsent(point, ignored -> unique.size());
             int size = unique.size();
             if (state.windInputBuffer.length != size * 3) state.windInputBuffer = new double[size * 3];
-            if (state.windOutputBuffer.length != size * PMAeroBridge.WIND_STRIDE) {
-                state.windOutputBuffer = new double[size * PMAeroBridge.WIND_STRIDE];
+            if (state.windOutputBuffer.length != size * PMAeroBridge.VECTOR_STRIDE) {
+                state.windOutputBuffer = new double[size * PMAeroBridge.VECTOR_STRIDE];
             }
             List<Vec3d> worldPoints = new ArrayList<>(size);
             for (Vec3d local : unique.keySet()) {
@@ -69,11 +69,11 @@ public final class AircraftWind {
                 state.windInputBuffer[i + 2] = world.z();
                 worldPoints.add(world);
             }
-            PMAeroBridge.sampleAircraftAtmosphereInto(level, state.windInputBuffer, state.windOutputBuffer);
+            PMAeroBridge.sampleAircraftWindInto(level, state.windInputBuffer, state.windOutputBuffer);
             List<WindSample> points = new ArrayList<>(size);
             Vec3d mean = Vec3d.ZERO;
             for (int i = 0; i < size; i++) {
-                int offset = i * PMAeroBridge.WIND_STRIDE;
+                int offset = i * PMAeroBridge.VECTOR_STRIDE;
                 Vec3d raw = new Vec3d(state.windOutputBuffer[offset], state.windOutputBuffer[offset + 1],
                     state.windOutputBuffer[offset + 2]);
                 points.add(new WindSample(worldPoints.get(i), raw, raw.scale(MPH_TO_METERS_PER_SECOND)));

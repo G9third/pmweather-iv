@@ -1,10 +1,21 @@
-# Compatibility evidence for 0.11.42
+# Compatibility evidence for 0.12.0-rc1
 
-## Scope of this release
+## Current candidate
 
-This release removes unused implementation layers, updates the architecture description and scopes terrain deduplication/feedback position keys to their dimension. The live coupled tire solver, aerodynamic laws, authored animation handling, rotor assistance, terrain material formulas, seat recovery and network protocol retain their behavior. Public and private builds share the same gameplay classes.
+The 2026-10-09 audit-fix candidate requires matching PMAero 1.0 wind revision 3.
+It uses vector-only wind sampling and shares exact same-tick native queries.
+Contact normals propagate through the common road/plane/helicopter tire solver.
+Pack tire coefficients are retained. Rounded wheel support uses a sphere/voxel proxy
+derived from the authored wheel radius; it is not an exact cylindrical tire mesh.
 
-Compilation and packaging are recorded separately. Existing regression scenarios were inspected and two fixtures were adapted to the current API; no regression or gameplay tests were run for this release. Earlier results below are historical evidence and are not a new validation of 0.11.42.
+Wheel impact effective mass, terrain response and gravity compensation use that normal.
+Body friction stops after convergence; tire setup evaluates symmetric matrix pairs once.
+Private traces include separate terrain-probe and gear-constraint timing stages.
+
+Java 21 offline compilation and public/dev packaging were performed. No new regression
+suite, game session or content-pack test was run for this candidate.
+Counts below are historical evidence and do not validate the new contact or wind behavior.
+Public and private builds share identical gameplay classes.
 
 ## Public source corpus
 
@@ -46,3 +57,6 @@ Recent sampled fixed-wing captures supported successful placement clearance and 
 Save/reload, multiplayer, unseen pack driving/flight and continuously swept independently animated panels remain validation gaps. Dynamic scaling, shear, mixed-source lifting geometry, complete hydrodynamics and same-resource-path OBJ hot reload remain unsupported or approximate. Derived mass/CG, neutral-frame inference, area-integrated parent circulation and attached geometry prepared at an already-deflected pose remain approximations. Helicopters retain the assisted controller.
 
 No correction selects a pack ID, vehicle identity or fixture filename. No broad compatibility or calibrated flight-performance claim follows from compilation or helper coverage alone.
+
+The rounded edge proxy is anchored to IV\'s existing lowest tire support point, which
+already includes axle, tilt and width. Flat top-face support height is preserved.

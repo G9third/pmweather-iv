@@ -45,7 +45,9 @@ public final class BodyContactFriction {
             }
             double length = Math.hypot(nx, ny);
             if (length > limit) { nx *= limit/length; ny *= limit/length; }
+            double change = Math.max(Math.abs(nx - x), Math.abs(ny - y));
             x = nx; y = ny;
+            if (change < 1.0e-7) break;
         }
         Vec3d impulse = t0.scale(x).add(t1.scale(y));
         Vec3d angularImpulse = a.scale(x).add(b.scale(y));

@@ -1,0 +1,16 @@
+.gradle/
+build/
+run/
+logs/
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.log
+*.pmivtrace
+*.pmivtrace.zip
+src/dev/
+docs/baseline-history/
+docs/REVIEW-*
+tools/*Trace*Regression.java
+tools/*Trace*.sha256
+tools/PMWeatherIVDiagnosticsRegression.java
+tools/PMWeatherIVDiagnosticsRegression.sha256

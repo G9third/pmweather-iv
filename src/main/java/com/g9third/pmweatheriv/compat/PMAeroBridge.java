@@ -10,9 +10,11 @@ import com.g9third.pmweatheriv.physics.Vec3d;
 /** Required PMAero 1.0 packed API. Failures stop the load update; no second physics law exists. */
 public final class PMAeroBridge {
     public static final int WIND_STRIDE = 13;
+    public static final int VECTOR_STRIDE = 3;
     public static final int LIFT_INPUT_STRIDE = 35;
     public static final int LIFT_OUTPUT_STRIDE = 15;
     private static final MethodHandle WIND;
+    private static final MethodHandle WIND_VECTORS;
     private static final MethodHandle BODY;
     private static final MethodHandle LIFT;
     private static volatile MethodHandle PARTICLE_WIND;
@@ -24,7 +26,9 @@ public final class PMAeroBridge {
             Class<?> wind = Class.forName("com.axes.pmweather_aeronautics.PMWeatherWindApi", false, loader);
             Class<?> body = Class.forName("com.axes.pmweather_aeronautics.ExternalAirframeBodyApi", false, loader);
             Class<?> lift = Class.forName("com.axes.pmweather_aeronautics.ExternalLiftingSurfaceApi", false, loader);
-            if (lift.getField("API_VERSION").getInt(null) != 2
+            if (wind.getField("WIND_IMPLEMENTATION_REVISION").getInt(null) != 3
+                || wind.getField("VECTOR_RESULT_STRIDE").getInt(null) != VECTOR_STRIDE
+                || lift.getField("API_VERSION").getInt(null) != 2
                 || body.getField("API_VERSION").getInt(null) != 2
                 || wind.getField("API_VERSION").getInt(null) != 2
                 || wind.getField("PACKED_RESULT_STRIDE").getInt(null) != WIND_STRIDE
@@ -37,17 +41,31 @@ public final class PMAeroBridge {
             }
             MethodHandles.Lookup lookup = MethodHandles.publicLookup();
             WIND = lookup.unreflect(wind.getMethod("sampleAircraftAtmosphereInto", ServerLevel.class, double[].class, double[].class));
+            WIND_VECTORS = lookup.unreflect(wind.getMethod("sampleAircraftWindInto",
+                ServerLevel.class, double[].class, double[].class));
             BODY = lookup.unreflect(body.getMethod("evaluatePackedInto", double[].class, double[].class,
                 double.class, double.class, double.class, double.class, double.class,
                 double.class, double.class, double.class, double.class, double.class));
             LIFT = lookup.unreflect(lift.getMethod("evaluatePackedInto", double[].class, double[].class));
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(new IllegalStateException(
-                "PMWeather-IV requires the compatible PMWeather Aeronautics 1.0 packed APIs", e));
+                "PMWeather-IV requires PMWeather Aeronautics 1.0 wind revision 3 and compatible packed APIs", e));
         }
     }
 
     private PMAeroBridge() {}
+    public static void sampleAircraftWindInto(ServerLevel level, double[] xyz, double[] output) {
+        try {
+            if (!(boolean) WIND_VECTORS.invokeExact(level, xyz, output)) {
+                throw new IllegalStateException("PMAero rejected the aircraft wind batch");
+            }
+        } catch (Throwable error) {
+            throw apiFailure("vector wind", error);
+        }
+        for (double value : output) if (!Double.isFinite(value))
+            throw new IllegalStateException("PMAero returned non-finite wind");
+    }
+
     public static void requireApis() { /* Class initialization validates all three APIs. */ }
 
     /** Optional client-only particle bridge; unavailable PMAero client classes leave motion untouched. */
@@ -67,7 +85,6 @@ public final class PMAeroBridge {
         if (particleWindResolved) return PARTICLE_WIND;
         synchronized (PMAeroBridge.class) {
             if (particleWindResolved) return PARTICLE_WIND;
-            particleWindResolved = true;
             try {
                 ClassLoader loader = PMAeroBridge.class.getClassLoader();
                 Class<?> client = Class.forName("com.axes.pmweather_aeronautics.ParticleWindClient", false, loader);
@@ -76,6 +93,7 @@ public final class PMAeroBridge {
             } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
                 PARTICLE_WIND = null;
             }
+            particleWindResolved = true;
             return PARTICLE_WIND;
         }
     }

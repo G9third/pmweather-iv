@@ -10,18 +10,47 @@ See [previous release notes](docs/RELEASE-0.11.53.md), [architecture](docs/ARCHI
 
 ## Wind display and weather test
 
-With PMWeather Aeronautics installed, use `/pmiv wind` for a reading and `/pmiv wind live on|off` to toggle the compact live wind display. While riding an aircraft, the HUD uses its heading. The same commands are available under `/aerowind wind` and `/aerowind live on|off`.
+With PMWeather Aeronautics installed, `/pmaero` provides the wind and weather-test commands. When PMWeather-IV is installed, it also registers `/pmiv` aliases. The compact wind HUD uses an aircraft's heading while riding and remains visible with chat and ordinary screens open. F1 hides it with the rest of the HUD.
 
-Start the repeatable weather sequence with `/pmiv weather test start` or `/aerowind test start`. The `stress`, `status`, `next`, `stop` and `list` subcommands are available under `/pmiv weather test`. PMIV forwards these commands to PMAero, which supplies the authoritative test wind. Test commands require operator permission on the server. The default flight sequence runs 16 phases for 15 seconds each (4 minutes); the full test is capped at 5 minutes.
+| Command | Action |
+| --- | --- |
+| `/pmaero wind` | Print one server-sampled wind reading. |
+| `/pmaero live [on|off]` and `/pmaero wind live [on|off]` | Show the live wind HUD, show its status, or turn it off. |
+| `/pmiv wind`, `/pmiv live [on|off]`, and `/pmiv wind live [on|off]` | PMIV client aliases for the same wind commands. |
+| `/aerowind wind`, `/aerowind live [on|off]`, `/pmweatheriv wind`, `/pmweatheriv wind live [on|off]` | Legacy PMIV aliases. |
+| `/pmaero test start [seconds]` | Start the repeatable weather sequence, optionally setting phase length in seconds. |
+| `/pmaero test stress [seconds]` | Start the stress sequence, optionally setting its duration in seconds. |
+| `/pmaero test stop`, `/pmaero test status`, `/pmaero test next` | Stop, inspect, or advance the active sequence. |
+| `/pmaero test list [stress]` | List the regular phases or the stress sequence. |
+| `/pmiv test ...` | PMIV alias for the server weather-test commands. |
 
-[Watch full weather test cycle](https://www.youtube.com/watch?v=pCM3C3d09k0)
+The legacy `/pmiv weather test ...` and `/aerowind test ...` routes remain available where registered. Test commands require operator permission on the server. The default flight sequence runs 16 phases for 15 seconds each (4 minutes); the full test is capped at 5 minutes. PMAero supplies the authoritative test wind.
+
+The private development artifact adds operator-only `/pmiv trace ...` and `/pmiv probe ...` commands. `/pmivtrace` and `/pmivtest` remain aliases. These commands are not included in the public artifact.
+
+[Watch full weather test cycle](https://streamable.com/fomjry)
 
 ## Build
 
-Use Java 21 and obtain external compile inputs described in `libs/README.txt` and `libs/DEPENDENCIES.json`. Run `./gradlew jar check` (or `gradlew.bat jar check`) for the public build. Numerical checks exercise production helpers; they do not establish Minecraft integration or calibrated handling across every pack.
+Use Java 21 and obtain external compile inputs described in `libs/README.txt` and `libs/DEPENDENCIES.json`. Run `./gradlew clean jar check` (or `gradlew.bat clean jar check`) for a clean public build. It produces `PMWeather-IV-<version>.jar`; `check` runs public numerical checks. Run `./gradlew jarDev checkDev` for the separate `PMWeather-IV-<version>-dev.jar` and its private diagnostics and artifact-separation checks. The development JAR shares the same gameplay classes as the public JAR and adds private trace, profiling, probe commands, and diagnostic networking. Neither compilation nor numerical checks establish Minecraft runtime integration or calibrated handling across every pack.
 
-The public artifact contains gameplay physics, state synchronization, the wind HUD, and wind/weather-test commands, plus a no-op observer boundary. Private trace writers, profiling, diagnostic commands and diagnostic networking remain in the development artifact. A separate private development source set binds the same core to an observer without changing physics authority.
+The public artifact contains gameplay physics, state synchronization, the wind HUD, and public wind/weather-test commands, plus a no-op observer boundary. Private trace writers, profiling, probe commands, and diagnostic networking remain in the development artifact. A separate private development source set binds the same core to an observer without changing physics authority.
 
 ## Runtime dependencies
 
 Minecraft 1.21.1, NeoForge, Immersive Vehicles, PMWeather, Sable and PMWeather Aeronautics 1.0 or later. Install dependency mods separately. Source licensing does not grant redistribution rights for dependency mods or content-pack assets.
+
+## Current integration
+
+This build requires the matching PMWeather Aeronautics 1.0 **wind revision 3**.
+Same display versions can identify different rebuilds; use the supplied matching artifacts.
+PMWeather 0.17.14 through 0.17.16 is the inspected integration family.
+
+Cars, planes and wheel-equipped helicopters share terrain contact normals and load-bounded
+tire reactions. Authored tire coefficients stay intact. Wheel edge support is approximated
+from the pack's radius; it does not fit an artificial slope across terrain blocks.
+See [compatibility evidence](docs/COMPATIBILITY-COVERAGE.md) and
+[current changes](docs/AUDIT-FIXES-20261009.md).
+
+Current compilation and packaging succeeded. Live contact and flight behavior still
+needs fresh trace evidence; earlier numerical assertion counts are historical.

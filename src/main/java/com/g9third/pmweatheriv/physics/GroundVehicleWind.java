@@ -190,7 +190,7 @@ public final class GroundVehicleWind {
 
         final int patchCount = state.patches.size();
         final int windLength = patchCount * 3;
-        final int windOutputLength = patchCount * PMAeroBridge.WIND_STRIDE;
+        final int windOutputLength = patchCount * PMAeroBridge.VECTOR_STRIDE;
         final int bodyInputLength = patchCount * PMAeroBridge.bodyInputStride();
         final int bodyOutputLength = PMAeroBridge.bodyOutputHeaderStride()
             + patchCount * PMAeroBridge.bodyOutputPatchStride();
@@ -210,10 +210,10 @@ public final class GroundVehicleWind {
             state.windInput[wind + 1] = world.y();
             state.windInput[wind + 2] = world.z();
         }
-        PMAeroBridge.sampleAircraftAtmosphereInto(level, state.windInput, state.windOutput);
+        PMAeroBridge.sampleAircraftWindInto(level, state.windInput, state.windOutput);
         List<WindStationSnapshot> stations=new ArrayList<>(patchCount);
         for (int i=0; i<patchCount; ++i) {
-            var patch=state.patches.get(i); int xyz=i*3, out=i*PMAeroBridge.WIND_STRIDE;
+            var patch=state.patches.get(i); int xyz=i*3, out=i*PMAeroBridge.VECTOR_STRIDE;
             stations.add(new WindStationSnapshot(patch.name(),patch.pointLocal(),patch.windSamplePointLocal(),
                 new Vec3d(state.windInput[xyz],state.windInput[xyz+1],state.windInput[xyz+2]),
                 new Vec3d(state.windOutput[out],state.windOutput[out+1],state.windOutput[out+2]),patch.area()));
@@ -272,7 +272,7 @@ public final class GroundVehicleWind {
         final int inputStride = PMAeroBridge.bodyInputStride();
         for (int i = 0; i < patchCount; ++i) {
             ModelSurfaceMap.PressurePatch patch = state.patches.get(i);
-            int wind = i * PMAeroBridge.WIND_STRIDE;
+            int wind = i * PMAeroBridge.VECTOR_STRIDE;
             Vec3d rawMph = new Vec3d(
                 state.windOutput[wind],
                 state.windOutput[wind + 1],

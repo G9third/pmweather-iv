@@ -77,10 +77,8 @@ archive from the same download location. Recipients may modify and rebuild PMWea
 the LGPL-3.0-only terms. Keep the corresponding source, this notice, and the included
 `COPYING.LESSER` and `COPYING` license texts with the release distribution.
 
-The corresponding 0.12.0-rc1 public source snapshot has been published in the PMWeather-IV
-repository at commit
+The earlier RC1 source snapshot was published at
 https://github.com/G9third/pmweather-iv/commit/e68701f037fa58537327f3ce08c1866cfd5f5dbb.
-This identifies the source snapshot for the separately supplied RC1 JAR, not a claim
-that a GitHub Release or its downloadable binary has already been published. Later
-repository documentation changes do not retroactively alter that compiled JAR; a
-new JAR build is required for updated embedded notices.
+It identifies the earlier source state. The 2026-10-09 audit-fix candidate is supplied with
+its own matching source archive and SHA-256 manifest. Preserve that matching archive with
+any distribution of this rebuilt binary; the version label alone does not identify it.

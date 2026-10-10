@@ -324,3 +324,24 @@ tasks.register('checkCoordinateContact', JavaExec) {
 }
 
 tasks.named('check') { dependsOn tasks.named('checkCoordinateContact') }
+
+// Identify same-version rebuilds by the exact gameplay source snapshot.
+def gameplayDigest = java.security.MessageDigest.getInstance('SHA-256')
+fileTree('src/main').files.findAll { it.isFile() }.sort {
+    project.relativePath(it).replace('\\', '/')
+}.each { sourceFile ->
+    gameplayDigest.update(project.relativePath(sourceFile).replace('\\', '/').getBytes('UTF-8'))
+    gameplayDigest.update((byte) 0)
+    gameplayDigest.update(sourceFile.bytes)
+}
+def gameplaySourceSha256 = gameplayDigest.digest().encodeHex().toString()
+tasks.named('jar', Jar).configure {
+    manifest { attributes 'Gameplay-Source-SHA256': gameplaySourceSha256 }
+}
+tasks.named('jarDev', Jar).configure {
+    manifest { attributes 'Gameplay-Source-SHA256': gameplaySourceSha256 }
+    doFirst {
+        if (!file('src/dev/java').isDirectory())
+            throw new GradleException('Private development source is not included in the public source archive.')
+    }
+}

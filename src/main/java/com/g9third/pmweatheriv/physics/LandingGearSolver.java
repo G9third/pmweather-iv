@@ -298,7 +298,6 @@ public final class LandingGearSolver {
         if (drive != null && vehicle != null) brake *= Double.isFinite(vehicle.brakingFactorVar.currentValue)
             ? Math.max(0,vehicle.brakingFactorVar.currentValue) : 0;
         int installedSupports=TireNormalCompliance.installedSupportCount(vehicle);
-        double roadVerticalProjection = Math.max(0.0, toWorld(orientation, new Vec3d(0.0, 1.0, 0.0)).y());
         for (int index=0; index<contacts.size(); ++index) {
             LandingGearContact contact = contacts.get(index);
             if (!contact.exactCollision() || contact.device() == null
@@ -337,7 +336,7 @@ public final class LandingGearSolver {
             TireNormalCompliance.Response response = contact.roadSuspension()
                 ? TireNormalCompliance.evaluateRoadSuspension(
                     RoadSuspensionModel.parameters(contact.device(), safeMass, installedSupports,
-                        roadVerticalProjection),
+                        Math.max(0.0, toWorld(orientation, new Vec3d(0, 1, 0)).dot(contact.normalWorld()))),
                     contact.complianceGapMeters(), target, 0.01, constraintStepSeconds,
                     contact.trueImpactResidual())
                 : TireNormalCompliance.evaluate(contact.device(),safeMass,
@@ -346,7 +345,7 @@ public final class LandingGearSolver {
             responses[index]=response;
             constraints.add(new GroundContactImpulseSolver.Contact(
                 contact.pointLocal().subtract(safeCenterOfMassLocal),
-                landingGearWheelForwardWorld(orientation,physicalSteeringDegrees(vehicle,contact.device(),drive)),
+                landingGearWheelForwardWorld(orientation,physicalSteeringDegrees(vehicle,contact.device(),drive), contact.normalWorld()),
                 grips[index].motive(), grips[index].lateral(), response.targetMps(),
                 drivenContacts[index],
                 rollingCoefficients[index],
@@ -354,7 +353,7 @@ public final class LandingGearSolver {
                     freeRolling(contact.device()), drive != null && drive.skidSteer() && drivenContacts[index],
                     liquidSupport),
                 response.softnessInverseKg(),drive == null ? Double.POSITIVE_INFINITY : drive.coastingCoefficientLimit(),
-                requestedDriveImpulses[index],response.hardNormalVelocityTargetMps()));
+                requestedDriveImpulses[index],response.hardNormalVelocityTargetMps(),contact.normalWorld()));
             indices.add(index);
         }
         GroundContactImpulseSolver.Result reaction = GroundContactImpulseSolver.solve(
@@ -378,8 +377,8 @@ public final class LandingGearSolver {
             LandingGearContact contact = contacts.get(i);
             Vec3d lever = contact.pointLocal().subtract(safeCenterOfMassLocal);
             double steering = physicalSteeringDegrees(vehicle,contact.device(),drive);
-            Vec3d forward = landingGearWheelForwardWorld(orientation,steering);
-            Vec3d lateral = new Vec3d(forward.z(),0,-forward.x());
+            Vec3d forward = landingGearWheelForwardWorld(orientation,steering,contact.normalWorld());
+            Vec3d lateral = contact.normalWorld().cross(forward).normalized();
             double side = Math.abs(lateralImpulses[i]);
             boolean commanded = landingGearSteeringCommanded(contact.device(),steering);
             totalLateral += side;
@@ -440,7 +439,7 @@ public final class LandingGearSolver {
             Vec3d pointVelocity = linearVelocityWorld.add(
                 omegaWorld.cross(toWorld(orientation, contact.pointLocal().subtract(centerOfMassLocal)))
             );
-            maximum = Math.max(maximum, Math.max(0.0, -pointVelocity.y()));
+            maximum = Math.max(maximum, Math.max(0.0, -pointVelocity.dot(contact.normalWorld())));
         }
         return maximum;
     }
@@ -455,10 +454,6 @@ public final class LandingGearSolver {
     ) {
         double maximum = 0.0;
         Vec3d omegaWorld = toWorld(orientation, angularVelocityBody);
-        Vec3d bodyForward = landingGearBodyForwardWorld(orientation);
-        Vec3d bodyLateral = new Vec3d(
-            bodyForward.z(), 0.0, -bodyForward.x()
-        ).normalized();
         for (LandingGearContact contact : contacts) {
             // Static skid/float model support stations are normal-only rigid
             // support, not tires. They must not drive IV's wheel-slip state or
@@ -469,26 +464,11 @@ public final class LandingGearSolver {
             double steeringDegrees = landingGearSteeringDegrees(
                 vehicle, contact.device()
             );
-            if (landingGearSteeringCommanded(contact.device(), steeringDegrees)) {
-                Vec3d forward = landingGearWheelForwardWorld(
-                    orientation, steeringDegrees
-                );
-                Vec3d lateral = new Vec3d(
-                    forward.z(), 0.0, -forward.x()
-                ).normalized();
-                Vec3d pointVelocity = linearVelocityWorld.add(
-                    omegaWorld.cross(toWorld(orientation, contact.pointLocal().subtract(centerOfMassLocal)))
-                );
-                maximum = Math.max(maximum, Math.abs(pointVelocity.dot(lateral)));
-            } else {
-                Vec3d pointVelocity = linearVelocityWorld.add(
-                    omegaWorld.cross(toWorld(orientation, contact.pointLocal().subtract(centerOfMassLocal)))
-                );
-                maximum = Math.max(
-                    maximum,
-                    Math.abs(pointVelocity.dot(bodyLateral))
-                );
-            }
+            Vec3d forward = landingGearWheelForwardWorld(orientation, steeringDegrees, contact.normalWorld());
+            Vec3d lateral = contact.normalWorld().cross(forward).normalized();
+            Vec3d pointVelocity = linearVelocityWorld.add(
+                omegaWorld.cross(toWorld(orientation, contact.pointLocal().subtract(centerOfMassLocal))));
+            maximum = Math.max(maximum, Math.abs(pointVelocity.dot(lateral)));
         }
         return maximum;
     }
@@ -520,7 +500,7 @@ public final class LandingGearSolver {
                 contact.exactCollision(),
                 contact.normalVelocityTargetMetersPerSecond(),
                 contact.trueImpactResidual(),
-                contact.complianceGapMeters(), contact.roadSuspension()
+                contact.complianceGapMeters(), contact.roadSuspension(), contact.normalWorld()
             );
         }
         contacts.sort(
@@ -682,6 +662,15 @@ public final class LandingGearSolver {
         double complianceGapMeters,
         boolean roadSuspension
     ) {
+        addUniqueConstraintContact(contacts, device, candidate, surfaceGapMeters, contactMode,
+            penetrationDepth, exactCollision, normalVelocityTargetMetersPerSecond, trueImpactResidual,
+            complianceGapMeters, roadSuspension, new Vec3d(0, 1, 0));
+    }
+
+    static void addUniqueConstraintContact(List<LandingGearContact> contacts,
+            PartGroundDevice device, Vec3d candidate, double surfaceGapMeters, String contactMode,
+            double penetrationDepth, boolean exactCollision, double normalVelocityTargetMetersPerSecond,
+            boolean trueImpactResidual, double complianceGapMeters, boolean roadSuspension, Vec3d normalWorld) {
         for (int index = 0; index < contacts.size(); ++index) {
             LandingGearContact existing = contacts.get(index);
             if (existing.pointLocal().subtract(candidate).lengthSquared() <= 1.0E-10) {
@@ -725,7 +714,8 @@ public final class LandingGearSolver {
                         existing.trueImpactResidual() || trueImpactResidual,
                         existing.roadSuspension() && Double.isFinite(existing.complianceGapMeters())
                             ? existing.complianceGapMeters() : complianceGapMeters,
-                        existing.roadSuspension() || roadSuspension
+                        existing.roadSuspension() || roadSuspension,
+                        exactCollision ? normalWorld : existing.normalWorld()
                     ));
                 }
                 return;
@@ -735,7 +725,7 @@ public final class LandingGearSolver {
             device, candidate, surfaceGapMeters, contactMode,
             penetrationDepth, exactCollision,
             normalVelocityTargetMetersPerSecond, trueImpactResidual,
-            complianceGapMeters, roadSuspension
+            complianceGapMeters, roadSuspension, normalWorld
         ));
     }
 
@@ -784,19 +774,13 @@ public final class LandingGearSolver {
         RotationMatrix orientation,
         double steeringDegrees
     ) {
-        double steeringRadians = Math.toRadians(steeringDegrees);
-        Vec3d forwardBody = new Vec3d(
-            Math.sin(steeringRadians), 0.0, Math.cos(steeringRadians)
-        );
-        Vec3d forwardWorld = toWorld(orientation, forwardBody);
-        Vec3d horizontal = new Vec3d(forwardWorld.x(), 0.0, forwardWorld.z());
-        if (horizontal.lengthSquared() <= 1.0E-12) {
-            Vec3d fallback = toWorld(orientation, new Vec3d(0.0, 0.0, 1.0));
-            horizontal = new Vec3d(fallback.x(), 0.0, fallback.z());
-        }
-        return horizontal.lengthSquared() <= 1.0E-12
-            ? new Vec3d(0.0, 0.0, 1.0)
-            : horizontal.normalized();
+        return landingGearWheelForwardWorld(orientation, steeringDegrees, new Vec3d(0, 1, 0));
+    }
+
+    static Vec3d landingGearWheelForwardWorld(RotationMatrix orientation, double steeringDegrees, Vec3d normal) {
+        double radians = Math.toRadians(steeringDegrees);
+        Vec3d forward = toWorld(orientation, new Vec3d(Math.sin(radians), 0, Math.cos(radians)));
+        return GroundContactImpulseSolver.tangentForward(forward, normal);
     }
 
     private static boolean freeRolling(PartGroundDevice device) {
@@ -886,8 +870,20 @@ public final class LandingGearSolver {
         BlockPos supportBlock,
         boolean trueImpactResidual,
         double complianceGapMeters,
-        boolean roadSuspension
+        boolean roadSuspension,
+        Vec3d normalWorld
     ) {
+        public LandingGearPhysicalContact(PartGroundDevice device, Vec3d pointLocal,
+                double surfaceGapMeters, String contactMode, double penetrationDepthMeters,
+                boolean exactCollision, double normalVelocityTargetMetersPerSecond,
+                double inwardNormalSpeedMetersPerSecond, Vec3d worldPoint, BlockPos supportBlock,
+                boolean trueImpactResidual, double complianceGapMeters, boolean roadSuspension) {
+            this(device, pointLocal, surfaceGapMeters, contactMode, penetrationDepthMeters,
+                exactCollision, normalVelocityTargetMetersPerSecond, inwardNormalSpeedMetersPerSecond,
+                worldPoint, supportBlock, trueImpactResidual, complianceGapMeters, roadSuspension,
+                new Vec3d(0, 1, 0));
+        }
+
         public LandingGearPhysicalContact(PartGroundDevice device, Vec3d pointLocal,
                 double surfaceGapMeters, String contactMode, double penetrationDepthMeters,
                 boolean exactCollision, double normalVelocityTargetMetersPerSecond,
@@ -919,7 +915,7 @@ public final class LandingGearSolver {
             return new LandingGearPhysicalContact(
                 device, pointLocal, surfaceGapMeters, contactMode, penetrationDepthMeters,
                 exactCollision, targetMetersPerSecond, inwardNormalSpeedMetersPerSecond,
-                worldPoint, supportBlock, impactResidual, complianceGapMeters, roadSuspension
+                worldPoint, supportBlock, impactResidual, complianceGapMeters, roadSuspension, normalWorld
             );
         }
     }
@@ -979,8 +975,18 @@ public final class LandingGearSolver {
         double normalVelocityTargetMetersPerSecond,
         boolean trueImpactResidual,
         double complianceGapMeters,
-        boolean roadSuspension
+        boolean roadSuspension,
+        Vec3d normalWorld
     ) {
+        public LandingGearContact(PartGroundDevice device, Vec3d pointLocal,
+                double surfaceGapMeters, String contactMode, double penetrationDepthMeters,
+                boolean exactCollision, double normalVelocityTargetMetersPerSecond,
+                boolean trueImpactResidual, double complianceGapMeters, boolean roadSuspension) {
+            this(device, pointLocal, surfaceGapMeters, contactMode, penetrationDepthMeters,
+                exactCollision, normalVelocityTargetMetersPerSecond, trueImpactResidual,
+                complianceGapMeters, roadSuspension, new Vec3d(0, 1, 0));
+        }
+
         public LandingGearContact(PartGroundDevice device, Vec3d pointLocal,
                 double surfaceGapMeters, String contactMode, double penetrationDepthMeters,
                 boolean exactCollision, double normalVelocityTargetMetersPerSecond) {

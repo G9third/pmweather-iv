@@ -11,7 +11,15 @@ public final class GroundContactImpulseSolver {
     public record Contact(Vec3d leverBody, Vec3d forwardWorld, double motiveMu, double lateralMu,
                           double normalVelocityTarget, boolean driven, double rollingCoefficient, boolean freeRolling,
                           double normalSoftnessInverseKg, double driveCoefficientLimit,
-                          double demandedDriveImpulseNs, double hardNormalVelocityTarget) {
+                          double demandedDriveImpulseNs, double hardNormalVelocityTarget, Vec3d normalWorld) {
+        public Contact(Vec3d leverBody, Vec3d forwardWorld, double motiveMu, double lateralMu,
+                       double normalVelocityTarget, boolean driven, double rollingCoefficient, boolean freeRolling,
+                       double normalSoftnessInverseKg, double driveCoefficientLimit,
+                       double demandedDriveImpulseNs, double hardNormalVelocityTarget) {
+            this(leverBody, forwardWorld, motiveMu, lateralMu, normalVelocityTarget, driven,
+                rollingCoefficient, freeRolling, normalSoftnessInverseKg, driveCoefficientLimit,
+                demandedDriveImpulseNs, hardNormalVelocityTarget, new Vec3d(0, 1, 0));
+        }
         /** Existing rigid/compliant contacts keep their original single-target behavior. */
         public Contact(Vec3d leverBody, Vec3d forwardWorld, double motiveMu, double lateralMu,
                        double normalVelocityTarget, boolean driven, double rollingCoefficient, boolean freeRolling,
@@ -22,6 +30,14 @@ public final class GroundContactImpulseSolver {
                 demandedDriveImpulseNs, Double.NEGATIVE_INFINITY);
         }
     }
+    static Vec3d tangentForward(Vec3d forward, Vec3d normal) {
+        Vec3d tangent = forward.subtract(normal.scale(forward.dot(normal)));
+        if (tangent.lengthSquared() < 1.0e-12) {
+            Vec3d axis = Math.abs(normal.z()) < 0.9 ? new Vec3d(0, 0, 1) : new Vec3d(1, 0, 0);
+            tangent = axis.subtract(normal.scale(axis.dot(normal)));
+        }
+        return tangent.normalized();
+    }
     public record Result(Vec3d velocityWorld, Vec3d angularVelocityBody,
                          double normalImpulseNs, double yawCapacityNm, boolean saturated,
                          double[] normalImpulses, double[] longitudinalImpulses, double[] lateralImpulses) {}
@@ -31,7 +47,8 @@ public final class GroundContactImpulseSolver {
                                double mass, double brake, double driveImpulseNs, double dt,
                                List<Contact> contacts) {
         if (!(mass > 0) || !(dt > 0) || !Double.isFinite(driveImpulseNs)
-            || !velocity.isFinite() || !omega.isFinite() || !inertia.isFinite())
+            || !velocity.isFinite() || !omega.isFinite() || !inertia.isFinite()
+            || Math.min(inertia.x(), Math.min(inertia.y(), inertia.z())) <= 0.0)
             throw new IllegalArgumentException("Invalid coupled ground solver input");
         // Replace only IV's wheel traction increment, preserving weather and native drag.
         Vec3d baseVelocity = velocity.subtract(nativeDriveDirection.scale(driveImpulseNs/mass));
@@ -43,10 +60,14 @@ public final class GroundContactImpulseSolver {
         Vec3d omegaWorld = toWorld(orientation, omega);
         for (int i=0; i<count; ++i) {
             Contact contact = contacts.get(i);
-            Vec3d f = contact.forwardWorld().normalized();
-            direction[i*3] = new Vec3d(0,1,0);
+            Vec3d n = contact.normalWorld();
+            if (n == null || !n.isFinite() || n.lengthSquared() < 1.0e-12)
+                throw new IllegalArgumentException("Invalid tire contact normal");
+            n = n.normalized();
+            Vec3d f = tangentForward(contact.forwardWorld(), n);
+            direction[i*3] = n;
             direction[i*3+1] = f;
-            direction[i*3+2] = new Vec3d(f.z(),0,-f.x()).normalized();
+            direction[i*3+2] = n.cross(f).normalized();
             Vec3d v = baseVelocity.add(omegaWorld.cross(toWorld(orientation, contact.leverBody())));
             for (int axis=0; axis<3; ++axis) {
                 int index=i*3+axis;
@@ -54,17 +75,22 @@ public final class GroundContactImpulseSolver {
                 residual[index]=v.dot(direction[index])-(axis==0 ? contact.normalVelocityTarget() : 0);
             }
         }
-        double maximumRow=0;
-        for (int row=0; row<variables; ++row) {
-            double rowSum=0;
-            for (int column=0; column<variables; ++column) {
-                Vec3d a=jacobian[row], b=jacobian[column];
-                double entry=direction[row].dot(direction[column])/mass
-                    + a.x()*b.x()/inertia.x()+a.y()*b.y()/inertia.y()+a.z()*b.z()/inertia.z();
-                rowSum+=Math.abs(entry);
+        // K is symmetric. Compute each pair once while retaining the exact row-sum bound.
+        double[] rowSums = new double[variables];
+        for (int row = 0; row < variables; ++row) {
+            Vec3d a = jacobian[row];
+            for (int column = row; column < variables; ++column) {
+                Vec3d b = jacobian[column];
+                double entry = Math.abs(direction[row].dot(direction[column]) / mass
+                    + a.x()*b.x()/inertia.x() + a.y()*b.y()/inertia.y() + a.z()*b.z()/inertia.z());
+                rowSums[row] += entry;
+                if (column != row) rowSums[column] += entry;
             }
-            if (row%3==0) rowSum+=Math.max(0,contacts.get(row/3).normalSoftnessInverseKg());
-            maximumRow=Math.max(maximumRow,rowSum);
+        }
+        double maximumRow = 0;
+        for (int row = 0; row < variables; ++row) {
+            if (row % 3 == 0) rowSums[row] += Math.max(0, contacts.get(row / 3).normalSoftnessInverseKg());
+            maximumRow = Math.max(maximumRow, rowSums[row]);
         }
         double step=maximumRow>1e-12 ? 0.8/maximumRow : 0;
         brake=Vec3d.clamp(brake,0,1);

@@ -3,26 +3,35 @@ package com.g9third.pmweatheriv.network;
 import com.g9third.pmweatheriv.PMWeatherIV;
 import com.g9third.pmweatheriv.physics.Vec3d;
 import com.g9third.pmweatheriv.compat.PMAeroBridge;
+import com.mojang.logging.LogUtils;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
+import org.slf4j.Logger;
 
 /**
  * Tiny optional request/reply channel for the live wind HUD.
  *
  * The HUD intentionally does not calculate its own weather when the server supports this
- * channel. The logical server samples the required PMAero atmosphere API,
+ * channel. The logical server samples the required PMAero wind-vector API,
  * then returns only the resulting 3-D vector. This keeps the graphic consistent with the
  * PMWeather field used by aircraft physics and also works when PMWeather itself is server-only.
  */
 public final class WindMonitorNetwork {
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final java.util.Map<ServerPlayer, CachedReading> SERVER = new java.util.WeakHashMap<>();
-    private record CachedReading(net.minecraft.server.level.ServerLevel level, long tick, Vec3d wind, boolean valid) {}
-    public static void clearServer() { SERVER.clear(); }
+    private static final java.util.Map<ServerPlayer, SamplingFailure> FAILURES = new java.util.WeakHashMap<>();
+    private record CachedReading(ServerLevel level, long tick, Vec3d wind, boolean valid) {}
+    private record SamplingFailure(ServerLevel level) {}
+    public static void clearServer() {
+        SERVER.clear();
+        FAILURES.clear();
+    }
     private static volatile Reading latestClientReading = Reading.UNAVAILABLE;
 
     private WindMonitorNetwork() {
@@ -46,16 +55,30 @@ public final class WindMonitorNetwork {
         if (!(context.player() instanceof ServerPlayer player)) return;
         long tick = player.level().getGameTime();
         CachedReading cached = SERVER.get(player);
-        if (cached == null || cached.level() != player.serverLevel() || tick - cached.tick() >= 2L
+        ServerLevel level = player.serverLevel();
+        if (cached == null || cached.level() != level || tick - cached.tick() >= 2L
             || tick < cached.tick()) {
-            net.minecraft.world.phys.Vec3 samplePoint = WindSamplePosition.exposedWorldPoint(player.serverLevel(), player);
-            double[] xyz = {samplePoint.x, samplePoint.y, samplePoint.z};
-            double[] output = new double[PMAeroBridge.WIND_STRIDE];
+            double[] output = new double[PMAeroBridge.VECTOR_STRIDE];
             boolean valid = true;
-            try { PMAeroBridge.sampleAircraftAtmosphereInto(player.serverLevel(), xyz, output); }
-            catch (RuntimeException | LinkageError failure) { valid = false; }
-            cached = new CachedReading(player.serverLevel(), tick,
-                valid ? new Vec3d(output[0], output[1], output[2]) : Vec3d.ZERO, valid);
+            Vec3d wind = Vec3d.ZERO;
+            try {
+                net.minecraft.world.phys.Vec3 samplePoint = WindSamplePosition.exposedWorldPoint(level, player);
+                if (samplePoint == null || !Double.isFinite(samplePoint.x)
+                    || !Double.isFinite(samplePoint.y) || !Double.isFinite(samplePoint.z)) {
+                    throw new IllegalStateException("PMAero wind sample position is unavailable");
+                }
+                double[] xyz = {samplePoint.x, samplePoint.y, samplePoint.z};
+                PMAeroBridge.sampleAircraftWindInto(level, xyz, output);
+                wind = new Vec3d(output[0], output[1], output[2]);
+                FAILURES.remove(player);
+            } catch (Throwable failure) {
+                if (failure instanceof VirtualMachineError error) throw error;
+                if (failure instanceof ThreadDeath death) throw death;
+                valid = false;
+                logSamplingFailure(player, level, failure);
+            }
+            cached = new CachedReading(level, tick,
+                wind, valid);
             SERVER.put(player, cached);
         }
         context.reply(new ReadingPayload(request.requestId(), tick,
@@ -63,7 +86,15 @@ public final class WindMonitorNetwork {
     }
 
     public static void onServerStopping(net.neoforged.neoforge.event.server.ServerStoppingEvent event) {
-        SERVER.clear();
+        clearServer();
+    }
+
+    private static void logSamplingFailure(ServerPlayer player, ServerLevel level, Throwable failure) {
+        SamplingFailure previous = FAILURES.get(player);
+        if (previous != null && previous.level() == level) return;
+        FAILURES.put(player, new SamplingFailure(level));
+        LOGGER.warn("PMIV wind HUD sampling failed for player {} ({}) in {}; suppressing repeats until recovery.",
+            player.getGameProfile().getName(), player.getUUID(), level.dimension().location(), failure);
     }
 
     private static void handleReading(ReadingPayload payload, IPayloadContext context) {
