@@ -4,9 +4,13 @@ Standalone Immersive Vehicles addon connecting ground vehicles and aircraft to P
 
 Ground vehicles share aircraft body collision, terrain recovery and integrated True Impact handling. IV retains drivetrain, controls and content-pack tire coefficients; road drive/braking acts through physical load-bounded tire contacts. Eligible road wheels and treads use a bounded series tire/suspension travel model unless the pack already authors vertical support motion. Compatibility follows authored features and geometry. Helicopters retain the assisted controller.
 
-Press **Right Alt** to toggle the auto-trim panel; its corner badge shows trim state and the current trim value.
+Auto trim is enabled by default on healthy, supported fixed-wing aircraft. The corner badge shows when it is adjusting elevator trim. Press the auto-trim key to turn it off or back on for that aircraft. The default key is **Right Alt**; see Controls for the current binding and to rebind it. The aircraft's off choice persists through dismount and save/reload. Set `autoTrim.enabled = false` in the PMWeather-IV config to disable auto trim globally.
 
-See [previous release notes](docs/RELEASE-0.11.53.md), [architecture](docs/ARCHITECTURE.md) and [notices](THIRD_PARTY_NOTICES.md) for behavior, supported modes and limitations.
+Please report content-pack incompatibilities or unexpected behavior across cars, tanks, APCs, planes and helicopters at [PMWeather-IV Issues](https://github.com/G9third/pmweather-iv/issues). Include the pack name and version, mod versions, and what happened. A development trace is optional. The first actual trim adjustment also displays the current key and the `autoTrim.enabled` config option.
+
+The public config keeps player-facing switches for general physics, auto trim, the wind-shear warning threshold and terrain block breaking. Internal aerodynamic coefficients and model sampling budgets now use the reviewed defaults in code. Older config files may retain those retired entries, but PMIV no longer reads them. The existing `terrainDamage.enableBlockBreaking` setting still controls crash terrain removal and continues to require IV's own global block-breaking setting.
+
+See the [0.12.0-rc1 release notes](docs/RELEASE-0.12.0-rc1.md), [previous release notes](docs/RELEASE-0.11.53.md), [architecture](docs/ARCHITECTURE.md) and [notices](THIRD_PARTY_NOTICES.md) for behavior, supported modes and limitations.
 
 ## Wind display and weather test
 
@@ -15,9 +19,9 @@ With PMWeather Aeronautics installed, `/pmaero` provides the wind and weather-te
 | Command | Action |
 | --- | --- |
 | `/pmaero wind` | Print one server-sampled wind reading. |
-| `/pmaero live [on|off]` and `/pmaero wind live [on|off]` | Show the live wind HUD, show its status, or turn it off. |
-| `/pmiv wind`, `/pmiv live [on|off]`, and `/pmiv wind live [on|off]` | PMIV client aliases for the same wind commands. |
-| `/aerowind wind`, `/aerowind live [on|off]`, `/pmweatheriv wind`, `/pmweatheriv wind live [on|off]` | Legacy PMIV aliases. |
+| `/pmaero live [on\|off]` and `/pmaero wind live [on\|off]` | Show the live wind HUD, show its status, or turn it off. |
+| `/pmiv wind`, `/pmiv live [on\|off]`, and `/pmiv wind live [on\|off]` | PMIV client aliases for the same wind commands. |
+| `/aerowind wind`, `/aerowind live [on\|off]`, `/pmweatheriv wind`, `/pmweatheriv wind live [on\|off]` | Legacy PMIV aliases. |
 | `/pmaero test start [seconds]` | Start the repeatable weather sequence, optionally setting phase length in seconds. |
 | `/pmaero test stress [seconds]` | Start the stress sequence, optionally setting its duration in seconds. |
 | `/pmaero test stop`, `/pmaero test status`, `/pmaero test next` | Stop, inspect, or advance the active sequence. |

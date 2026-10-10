@@ -4,8 +4,10 @@ import argparse, datetime, hashlib, json, zipfile
 root = Path(__file__).resolve().parents[1]
 fixed_files = ['.gitignore', 'CONTRIBUTING.md', 'COPYING', 'COPYING.LESSER', 'LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md', 'build.bat', 'build.gradle', 'docs/ARCHITECTURE.md', 'docs/AUDIT-FIXES-20261009.md', 'docs/COMPATIBILITY-COVERAGE.md', 'docs/CONTENT-PACK-AIR-WARNING-SOUNDS.md', 'docs/RELEASE-0.11.42.md', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.properties', 'gradlew', 'gradlew.bat', 'libs/DEPENDENCIES.json', 'libs/README.txt', 'settings.gradle', 'tools/AnimationEvidenceRegression.java', 'tools/AuthoredSurfacePoseRegression.java', 'tools/ContactLifecycleRegression.java', 'tools/CoordinateContactRegression.java', 'tools/GeometryRegression.java', 'tools/GeometryRegression.sha256', 'tools/MaterialRegression.java', 'tools/MaterialRegression.sha256', 'tools/MovingModelHullRegression.java', 'tools/NetworkStateRegression.java', 'tools/ObserverIsolationRegression.java', 'tools/RoadVehicleCompatibilityRegression.java', 'tools/TerrainGeometryRegression.java', 'tools/TerrainGeometryRegression.sha256', 'tools/WingMomentRegression.java', 'tools/package_source.py']
 fixed_files.append('docs/RELEASE-0.11.53.md')
+fixed_files.append('docs/RELEASE-0.12.0-rc1.md')
 fixed_files.extend([
  'tools/CrashGeometryCacheRegression.java',
+ 'tools/AutoTrimRegression.java',
  'tools/RigidTerrainContactRegression.java',
  'tools/RoadSuspensionRegression.java',
 ])

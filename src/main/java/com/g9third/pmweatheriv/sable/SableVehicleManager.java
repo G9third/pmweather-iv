@@ -7,6 +7,8 @@ import com.g9third.pmweatheriv.physics.AircraftPhysics;
 import com.g9third.pmweatheriv.physics.AirframeLoads;
 import com.g9third.pmweatheriv.physics.AircraftState;
 import com.g9third.pmweatheriv.physics.AutoTrimController;
+import com.g9third.pmweatheriv.physics.AutoTrimOffset;
+import com.g9third.pmweatheriv.physics.AutoTrimPreferences;
 import com.g9third.pmweatheriv.physics.AutoTrimRuntime;
 import com.g9third.pmweatheriv.physics.Vec3d;
 import com.g9third.pmweatheriv.network.RoadSuspensionNetwork;
@@ -75,29 +77,90 @@ public final class SableVehicleManager {
         SableVehicleBody body, AirframeLoads.SolveResult result
     ) {
         AutoTrimController controller = state.autoTrim;
-        if (!controller.enabled()) return;
-        UUID pilotId = controller.pilot();
-        ServerPlayer pilot = pilotId == null ? null : level.getServer().getPlayerList().getPlayer(pilotId);
-        if (pilot == null || pilot.level() != level
-            || !com.g9third.pmweatheriv.network.AutoTrimNetwork.isCurrentController(pilot, vehicle)) {
-            cancelAutoTrim(vehicle, level, state, "DISMOUNTED");
+        boolean supportedFixedWing = vehicle.definition != null && vehicle.definition.motorized != null
+            && vehicle.definition.motorized.isAircraft && !vehicle.definition.motorized.isBlimp
+            && state.plan != null && !state.plan.rotorcraft();
+        if (!supportedFixedWing) {
+            if (controller.enabled()) cancelAutoTrim(vehicle, level, state, "UNSUPPORTED");
+            state.autoTrimOverlayManualTrimChanged = false;
+            state.autoTrimOverlayManualTrimDelta = 0.0;
             return;
         }
+
+        ServerPlayer pilot = com.g9third.pmweatheriv.network.AutoTrimNetwork.currentController(level, vehicle);
+        boolean globallyEnabled = PMWeatherIVConfig.autoTrimEnabled();
+        boolean optedOut = AutoTrimPreferences.disabled(vehicle);
+        if (!globallyEnabled || optedOut) {
+            AutoTrimOffset.freezeAtAppliedOffset(vehicle);
+            state.autoTrimOverlayManualTrimChanged = false;
+            state.autoTrimOverlayManualTrimDelta = 0.0;
+            String reason = globallyEnabled ? "USER_DISABLED" : "CONFIG_DISABLED";
+            if (controller.enabled()) cancelAutoTrim(vehicle, level, state, reason);
+            boolean heartbeatDue = state.lastAutoTrimStatusTick == Long.MIN_VALUE
+                || level.getGameTime() - state.lastAutoTrimStatusTick >= 10L;
+            if (pilot != null && (state.lastAutoTrimStatusState != AutoTrimController.State.OFF
+                || !reason.equals(state.lastAutoTrimStatusReason) || heartbeatDue)) {
+                controller.disable(reason);
+                state.autoTrimAdjusting = false;
+                state.autoTrimCommandedTrim = vehicle.elevatorTrimVar.currentValue;
+                sendAutoTrimStatus(pilot, vehicle, level, state, false);
+            }
+            return;
+        }
+        if (!AutoTrimPreferences.shouldAutoStart(globallyEnabled, supportedFixedWing,
+            optedOut, pilot != null)) {
+            if (pilot == null) {
+                cancelAutoTrim(vehicle, level, state, "DISMOUNTED");
+                state.autoTrimOverlayManualTrimChanged = false;
+                state.autoTrimOverlayManualTrimDelta = 0.0;
+            }
+            return;
+        }
+        boolean offsetTrim = AutoTrimOffset.usesAuthoredModifierOffset(vehicle);
+        double controllerTrim = offsetTrim ? AutoTrimOffset.applied(vehicle)
+            : vehicle.elevatorTrimVar.currentValue;
+        if (!controller.enabled()) {
+            controller.enable(pilot.getUUID(), controllerTrim);
+            state.nextAutoTrimDamageCheck = Long.MIN_VALUE;
+        } else if (!pilot.getUUID().equals(controller.pilot())) {
+            cancelAutoTrim(vehicle, level, state, "DISMOUNTED");
+            controller.enable(pilot.getUUID(), controllerTrim);
+            state.nextAutoTrimDamageCheck = Long.MIN_VALUE;
+        }
+
         AutoTrimController.Output output = AutoTrimRuntime.advance(
             vehicle, state, result, body, level.getGameTime()
         );
+        if (!output.enabled() || !output.adjusting()) {
+            AutoTrimOffset.freezeAtAppliedOffset(vehicle);
+        }
         String fitDiagnostic = controller.consumeFitDiagnostic();
         if (fitDiagnostic != null && PMIVObserver.loggingEnabled()) {
             PMIVObserver.log("PMIV_AUTO_TRIM_FIT vehicleUuid=" + vehicle.uniqueUUID
                 + " " + fitDiagnostic);
         }
-        double currentTrim = vehicle.elevatorTrimVar.currentValue;
+        double currentTrim = offsetTrim ? AutoTrimOffset.applied(vehicle)
+            : vehicle.elevatorTrimVar.currentValue;
+        state.autoTrimCommandedTrim = output.trim();
+        state.autoTrimAdjusting = output.adjusting();
         if (output.enabled() && Double.isFinite(output.trim())
             && Math.abs(output.trim() - currentTrim) > 1.0E-6) {
-            vehicle.elevatorTrimVar.setTo(output.trim(), true);
+            if (offsetTrim) AutoTrimOffset.setRequested(vehicle, output.trim(), true);
+            else vehicle.elevatorTrimVar.setTo(output.trim(), true);
         }
+        if (output.adjusting() && !AutoTrimPreferences.noticeShown(vehicle)) {
+            AutoTrimPreferences.setNoticeShown(vehicle);
+            state.autoTrimFirstNoticePending = true;
+            state.autoTrimFirstNoticeTick = level.getGameTime();
+        }
+        if (state.autoTrimFirstNoticePending
+            && level.getGameTime() - state.autoTrimFirstNoticeTick > 100L) {
+            state.autoTrimFirstNoticePending = false;
+        }
+        boolean firstEngagementNotice = state.autoTrimFirstNoticePending;
         boolean changed = state.lastAutoTrimStatusState != output.state()
-            || !state.lastAutoTrimStatusReason.equals(output.reason());
+            || !state.lastAutoTrimStatusReason.equals(output.reason())
+            || state.lastAutoTrimStatusAdjusting != output.adjusting();
         if (changed && PMIVObserver.loggingEnabled()) {
             double flightPath = Double.NaN;
             if (state.kinematics != null && state.kinematics.centerVelocityWorld() != null) {
@@ -110,23 +173,40 @@ public final class SableVehicleManager {
                 + " currentTrim=" + currentTrim + " requestedTrim=" + output.trim()
                 + " flightPathDegrees=" + flightPath);
         }
-        if (changed || state.lastAutoTrimStatusTick == Long.MIN_VALUE
+        if (firstEngagementNotice || changed || state.lastAutoTrimStatusTick == Long.MIN_VALUE
             || level.getGameTime() - state.lastAutoTrimStatusTick >= 10L) {
-            com.g9third.pmweatheriv.network.AutoTrimNetwork.sendStatus(pilot, vehicle, state, level);
+            sendAutoTrimStatus(pilot, vehicle, level, state, firstEngagementNotice);
             state.lastAutoTrimStatusState = output.state();
             state.lastAutoTrimStatusReason = output.reason();
+            state.lastAutoTrimStatusAdjusting = output.adjusting();
             state.lastAutoTrimStatusTick = level.getGameTime();
         }
     }
 
+    private static void sendAutoTrimStatus(ServerPlayer pilot, EntityVehicleF_Physics vehicle,
+                                           ServerLevel level, AircraftState state,
+                                           boolean firstEngagementNotice) {
+        com.g9third.pmweatheriv.network.AutoTrimNetwork.sendStatus(
+            pilot, vehicle, state, level, firstEngagementNotice
+        );
+        state.lastAutoTrimStatusState = state.autoTrim.state();
+        state.lastAutoTrimStatusReason = state.autoTrim.reason();
+        state.lastAutoTrimStatusAdjusting = state.autoTrimAdjusting;
+        state.lastAutoTrimStatusTick = level.getGameTime();
+    }
+
     private static void cancelAutoTrim(EntityVehicleF_Physics vehicle, ServerLevel level,
                                        AircraftState state, String reason) {
+        AutoTrimOffset.freezeAtAppliedOffset(vehicle);
         UUID pilotId = state.autoTrim.pilot();
         if (pilotId == null) return;
         state.autoTrim.disable(reason);
         state.nextAutoTrimDamageCheck = Long.MIN_VALUE;
         state.lastAutoTrimStatusState = AutoTrimController.State.OFF;
         state.lastAutoTrimStatusReason = reason;
+        state.autoTrimCommandedTrim = vehicle.elevatorTrimVar.currentValue;
+        state.autoTrimAdjusting = false;
+        state.lastAutoTrimStatusAdjusting = false;
         state.lastAutoTrimStatusTick = level.getGameTime();
         com.g9third.pmweatheriv.network.AutoTrimNetwork.sendStatusToPilot(pilotId, vehicle, state, level);
     }

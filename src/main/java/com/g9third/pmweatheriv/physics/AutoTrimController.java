@@ -10,6 +10,7 @@ import java.util.UUID;
  * trim value; it never predicts or mutates a physics solve.
  */
 public final class AutoTrimController {
+    /** Matches IV's native fixed-wing autopilot trim increment of 0.1 degrees per tick. */
     public static final double MAX_STEP_PER_TICK = 0.1;
     private static final double PROBE_DISTANCE = 0.4;
     private static final int BASELINE_TICKS = 12;
@@ -21,7 +22,7 @@ public final class AutoTrimController {
 
     public enum State { OFF, LEARNING, ON, PAUSED, LIMITED }
 
-    public record Output(double trim, State state, String reason, boolean enabled) {}
+    public record Output(double trim, State state, String reason, boolean enabled, boolean adjusting) {}
 
     /** All values are physical owner-tick observations; no IV or Sable object is retained. */
     public record Input(
@@ -49,8 +50,30 @@ public final class AutoTrimController {
         boolean heldForPhysics,
         boolean terrainContact,
         boolean existingAutopilot,
-        boolean finite
-    ) {}
+        boolean finite,
+        double minimumTrim,
+        double maximumTrim,
+        boolean offsetTrim,
+        boolean manualTrimChanged
+    ) {
+        /** Backward-compatible symmetric native-trim bounds for existing numerical fixtures. */
+        public Input(long tick, double trim, double trimLimit, double trueAirspeed,
+                     double forwardAirspeed, double dynamicPressure, double wingArea,
+                     double maximumLiftCoefficient, double maxMainWingSeparation,
+                     double angleOfAttackDegrees, double bankDegrees,
+                     double pitchRateRadiansPerSecond, double flightPathDegrees,
+                     double pitchAngularAcceleration, double elevatorInput, double flapAngle,
+                     double mass, double pitchInertia, int damageSignature, boolean fixedWing,
+                     boolean healthy, boolean heldForPhysics, boolean terrainContact,
+                     boolean existingAutopilot, boolean finite) {
+            this(tick, trim, trimLimit, trueAirspeed, forwardAirspeed, dynamicPressure,
+                wingArea, maximumLiftCoefficient, maxMainWingSeparation, angleOfAttackDegrees,
+                bankDegrees, pitchRateRadiansPerSecond, flightPathDegrees,
+                pitchAngularAcceleration, elevatorInput, flapAngle, mass, pitchInertia,
+                damageSignature, fixedWing, healthy, heldForPhysics, terrainContact,
+                existingAutopilot, finite, -Math.abs(trimLimit), Math.abs(trimLimit), false, false);
+        }
+    }
 
     private enum LearningPhase { BASE_BEFORE, RAMP_TO_PROBE, PROBE_HOLD, RAMP_TO_BASE, BASE_AFTER }
 
@@ -108,6 +131,9 @@ public final class AutoTrimController {
     public State state() { return state; }
     public String reason() { return reason; }
     public double expectedTrim() { return expectedTrim; }
+    public boolean adjusting() { return adjusting; }
+
+    private boolean adjusting;
 
     /** A one-shot compact fit record, consumed only by the optional developer logger. */
     public String consumeFitDiagnostic() {
@@ -118,25 +144,16 @@ public final class AutoTrimController {
 
     public void toggle(UUID controllingPilot, double currentTrim) {
         if (enabled) {
-            if (finite(expectedTrim) && finite(currentTrim)
-                && Math.abs(currentTrim - expectedTrim) > 0.025) {
-                disable("MANUAL_TRIM");
-            } else if (probeTrimOwned && finite(learningBaseTrim)
-                && Math.abs(currentTrim - learningBaseTrim) > 0.001) {
-                restoreTargetTrim = learningBaseTrim;
-                restorePending = true;
-                disableAfterRestore = true;
-                learningInterrupted = false;
-                clearAttempt();
-                state = State.PAUSED;
-                reason = "RESTORING_TRIM";
-                stableTicks = 0;
-                manualNeutralTicks = 0;
-            } else {
-                disable("OFF");
-            }
+            // Off is immediate: a deliberate per-aircraft disable must stop all
+            // further trim writes, including cleanup of an in-progress probe.
+            disable("OFF");
             return;
         }
+        enable(controllingPilot, currentTrim);
+    }
+
+    public void enable(UUID controllingPilot, double currentTrim) {
+        if (enabled && java.util.Objects.equals(pilot, controllingPilot)) return;
         enabled = true;
         pilot = controllingPilot;
         expectedTrim = currentTrim;
@@ -144,6 +161,7 @@ public final class AutoTrimController {
         disableAfterRestore = false;
         restorePending = false;
         probeTrimOwned = false;
+        adjusting = false;
         retryBudgetExhausted = false;
         retryAfterTick = Long.MIN_VALUE;
         startFreshLearning(currentTrim, Long.MIN_VALUE, "LEARNING");
@@ -172,6 +190,7 @@ public final class AutoTrimController {
         candidateLagTicks = 0;
         stableTicks = 0;
         manualNeutralTicks = 0;
+        adjusting = false;
     }
 
     /**
@@ -180,11 +199,36 @@ public final class AutoTrimController {
      */
     public Output update(Input in) {
         if (in == null || !enabled) return output(in == null ? 0.0 : in.trim());
-        double currentTrim = finite(in.trim()) ? clamp(in.trim(), -in.trimLimit(), in.trimLimit()) : 0.0;
+        double minimumTrim = minimumTrim(in);
+        double maximumTrim = maximumTrim(in);
+        double currentTrim = finite(in.trim()) ? clamp(in.trim(), minimumTrim, maximumTrim) : 0.0;
 
-        if (finite(expectedTrim) && Math.abs(currentTrim - expectedTrim) > 0.025) {
+        if (in.manualTrimChanged() || !in.offsetTrim()
+            && finite(expectedTrim) && Math.abs(currentTrim - expectedTrim) > 0.025) {
             // A player or another native system moved elevator trim. Never chase it.
-            disable("MANUAL_TRIM");
+            hasTrimSlope = false;
+            clearAttempt();
+            probeTrimOwned = false;
+            restorePending = false;
+            restoreTargetTrim = Double.NaN;
+            learningInterrupted = true;
+            expectedTrim = currentTrim;
+            state = State.PAUSED;
+            reason = "MANUAL_TRIM";
+            stableTicks = 0;
+            manualNeutralTicks = 0;
+            adjusting = false;
+            return output(currentTrim);
+        }
+        if (in.offsetTrim() && finite(expectedTrim) && Math.abs(currentTrim - expectedTrim) > 0.025
+            && (Math.abs(currentTrim - minimumTrim) <= 1.0E-5
+                || Math.abs(currentTrim - maximumTrim) <= 1.0E-5)) {
+            // A native baseline shift can move the legal offset range. This is saturation,
+            // not manual input; retain the actual bounded offset as the new target.
+            expectedTrim = currentTrim;
+            state = State.LIMITED;
+            reason = "TRIM_LIMIT";
+            adjusting = false;
             return output(currentTrim);
         }
         if (disableAfterRestore) {
@@ -300,10 +344,11 @@ public final class AutoTrimController {
             scheduleLearningRetry(in.tick());
             return output(currentTrim);
         }
-        double desiredTrim = clamp(currentTrim + trimDemand, -in.trimLimit(), in.trimLimit());
+        double desiredTrim = clamp(currentTrim + trimDemand, minimumTrim, maximumTrim);
         if (Math.abs(desiredTrim - currentTrim) < 1.0E-5
             && Math.abs(trimDemand) > 0.025
-            && Math.signum(trimDemand) == Math.signum(currentTrim)) {
+            && (currentTrim <= minimumTrim + 1.0E-5 && trimDemand < 0.0
+                || currentTrim >= maximumTrim - 1.0E-5 && trimDemand > 0.0)) {
             state = State.LIMITED;
             reason = "TRIM_LIMIT";
             return output(currentTrim);
@@ -311,7 +356,7 @@ public final class AutoTrimController {
         state = State.ON;
         reason = "ON";
         double delta = clamp(desiredTrim - currentTrim, -MAX_STEP_PER_TICK, MAX_STEP_PER_TICK);
-        return output(clamp(currentTrim + delta, -in.trimLimit(), in.trimLimit()));
+        return output(clamp(currentTrim + delta, minimumTrim, maximumTrim));
     }
 
     private Output advanceLearning(Input in, double currentTrim) {
@@ -323,8 +368,8 @@ public final class AutoTrimController {
                 recordAttemptSample(in);
                 if (++baselineTicks >= BASELINE_TICKS) {
                     learningBaseTrim = currentTrim;
-                    double positiveRoom = in.trimLimit() - currentTrim;
-                    double negativeRoom = currentTrim + in.trimLimit();
+                    double positiveRoom = maximumTrim(in) - currentTrim;
+                    double negativeRoom = currentTrim - minimumTrim(in);
                     double direction = nextProbeDirection;
                     if (direction > 0.0 && positiveRoom < PROBE_DISTANCE) direction = -1.0;
                     else if (direction < 0.0 && negativeRoom < PROBE_DISTANCE) direction = 1.0;
@@ -335,7 +380,7 @@ public final class AutoTrimController {
                     }
                     nextProbeDirection = -direction;
                     probeTargetTrim = clamp(currentTrim + direction * PROBE_DISTANCE,
-                        -in.trimLimit(), in.trimLimit());
+                        minimumTrim(in), maximumTrim(in));
                     learningPhase = LearningPhase.RAMP_TO_PROBE;
                 }
                 return output(currentTrim);
@@ -582,7 +627,7 @@ public final class AutoTrimController {
             else if (learningInterrupted) startFreshLearning(currentTrim, in.tick(), "LEARNING");
             return output(currentTrim);
         }
-        double target = clamp(restoreTargetTrim, -in.trimLimit(), in.trimLimit());
+        double target = clamp(restoreTargetTrim, minimumTrim(in), maximumTrim(in));
         if (Math.abs(currentTrim - target) <= 0.001) {
             restorePending = false;
             probeTrimOwned = false;
@@ -600,8 +645,10 @@ public final class AutoTrimController {
     }
 
     private Output output(double trim) {
+        adjusting = enabled && finite(trim) && finite(expectedTrim)
+            && Math.abs(trim - expectedTrim) > 1.0E-6;
         expectedTrim = enabled ? trim : Double.NaN;
-        return new Output(trim, state, reason, enabled);
+        return new Output(trim, state, reason, enabled, adjusting);
     }
 
     private static double stepToward(double from, double to) {
@@ -610,6 +657,18 @@ public final class AutoTrimController {
 
     private static double relativeChange(double value, double reference) {
         return Math.abs(value - reference) / Math.max(1.0, Math.abs(reference));
+    }
+
+    private static double minimumTrim(Input in) {
+        if (finite(in.minimumTrim()) && finite(in.maximumTrim())
+            && in.minimumTrim() <= in.maximumTrim()) return in.minimumTrim();
+        return -Math.abs(in.trimLimit());
+    }
+
+    private static double maximumTrim(Input in) {
+        if (finite(in.minimumTrim()) && finite(in.maximumTrim())
+            && in.minimumTrim() <= in.maximumTrim()) return in.maximumTrim();
+        return Math.abs(in.trimLimit());
     }
 
     private static boolean finite(double value) { return Double.isFinite(value); }

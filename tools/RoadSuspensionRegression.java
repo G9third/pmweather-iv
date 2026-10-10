@@ -25,7 +25,10 @@ public final class RoadSuspensionRegression {
     public static void main(String[] args) throws Exception {
         calmBrakedHold();
         saturatedBrakingSlipsBeforeLift();
+        windExceedsGripBeforeLift();
         torqueTransfersLoadAndUnloadsWheels();
+        rollMomentMustExceedSupportCapacityToTip();
+        fallbackSuspensionHasBoundedTravelAndCompression();
         unloadedWheelHasNoGrip();
         serviceAndParkingBrakeCommandsRemainManual();
         grassRollingCoefficientRemainsAuthored();
@@ -68,6 +71,25 @@ public final class RoadSuspensionRegression {
         }
     }
 
+    private static void windExceedsGripBeforeLift() {
+        double mass = 2100.0;
+        double dt = 0.05;
+        double lateralGrip = 0.78;
+        double windForce = 1.25 * lateralGrip * mass * GRAVITY;
+        Vec3d externalWindVelocity = new Vec3d(windForce * dt / mass, -GRAVITY * dt, 0.0);
+        GroundContactImpulseSolver.Result result = solve(mass, externalWindVelocity,
+            Vec3d.ZERO, 0.0, dt, fourWheels(0.58, lateralGrip));
+        require(result.velocityWorld().x() > 0.0,
+            "broadside wind beyond mu N leaves lateral slip");
+        for (int i = 0; i < 4; ++i) {
+            require(result.normalImpulses()[i] > 0.0,
+                "wind-induced lateral slip does not itself lift level-ground wheels " + i);
+            require(Math.abs(result.lateralImpulses()[i])
+                    <= lateralGrip * result.normalImpulses()[i] + 1.0e-5,
+                "wind response stays within each wheel's mu N limit " + i);
+        }
+    }
+
     private static void torqueTransfersLoadAndUnloadsWheels() {
         double mass = 2100.0;
         double dt = 0.05;
@@ -82,6 +104,60 @@ public final class RoadSuspensionRegression {
         require(result.angularVelocityBody().z() > 0.05,
             "physical support impulse leaves the accepted tip rate");
         for (double normal : normals) require(normal >= 0.0, "unilateral wheel load");
+    }
+
+    private static void rollMomentMustExceedSupportCapacityToTip() {
+        double mass = 2100.0;
+        double dt = 0.05;
+        double halfTrack = 1.0;
+        double supportMoment = mass * GRAVITY * halfTrack;
+        Vec3d inertia = new Vec3d(6149.0, 6701.0, 1373.0);
+        Vec3d gravityVelocity = new Vec3d(0.0, -GRAVITY * dt, 0.0);
+        List<GroundContactImpulseSolver.Contact> contacts = fourWheelsAtHeight(
+            -0.5418, 0.58, 0.78);
+
+        GroundContactImpulseSolver.Result below = GroundContactImpulseSolver.solve(
+            gravityVelocity,
+            new Vec3d(0.0, 0.0, -0.75 * supportMoment * dt / inertia.z()),
+            inertia, new RotationMatrix(), Vec3d.ZERO, mass, 0.0, 0.0, dt, contacts);
+        for (double normal : below.normalImpulses()) {
+            require(normal > 0.0, "sub-threshold wind roll moment keeps every support loaded");
+        }
+        require(Math.abs(below.angularVelocityBody().z()) < 0.05,
+            "loaded supports resist a sub-threshold roll moment");
+
+        GroundContactImpulseSolver.Result above = GroundContactImpulseSolver.solve(
+            gravityVelocity,
+            new Vec3d(0.0, 0.0, -1.25 * supportMoment * dt / inertia.z()),
+            inertia, new RotationMatrix(), Vec3d.ZERO, mass, 0.0, 0.0, dt, contacts);
+        long unloadedSide = java.util.Arrays.stream(above.normalImpulses())
+            .filter(value -> value < 1.0e-5).count();
+        require(unloadedSide >= 2,
+            "roll moment above the track-width support capacity unloads a full side");
+        require(above.angularVelocityBody().z() < -0.05,
+            "one-sided support loss leaves the physical tip rate");
+    }
+
+    private static void fallbackSuspensionHasBoundedTravelAndCompression() {
+        near(0.072, RoadSuspensionModel.wheelSagMetersForRadius(0.4), 1.0e-12,
+            "generic wheel sag scales with radius at the reduced fallback fraction");
+        near(0.11, RoadSuspensionModel.wheelSagMetersForRadius(1.0), 1.0e-12,
+            "large wheel sag remains capped at the reduced generic maximum");
+        near(0.035, RoadSuspensionModel.wheelSagMetersForRadius(0.05), 1.0e-12,
+            "small wheel sag has a finite generic minimum");
+        near(0.136, RoadSuspensionModel.maximumSeriesCompressionMeters(0.02, 0.06, 0.8), 1.0e-12,
+            "road bump envelope counts two tire and projected suspension deflections");
+
+        double mass = 525.0;
+        double sag = 0.072;
+        near(-sag, RoadSuspensionModel.nextTravelMeters(-sag, 0.0, mass, sag, 0.05), 1.0e-12,
+            "unloaded wheel can settle to full natural extension");
+        near(sag, RoadSuspensionModel.nextTravelMeters(0.0, 1.0e9, mass, sag, 0.05), 1.0e-12,
+            "fallback compression is bounded at one sag beyond static ride height");
+        near(0.035, TireNormalCompliance.maximumRoadSolidPenetration(0.02, 0.005), 1.0e-12,
+            "road wheel pose recovery uses the two-deflection tire bump envelope");
+        near(0.055, TireNormalCompliance.maximumSolidPenetration(0.02, 0.005), 1.0e-12,
+            "non-road native tire compliance retains its existing bump envelope");
     }
 
     private static void unloadedWheelHasNoGrip() {
@@ -182,9 +258,15 @@ public final class RoadSuspensionRegression {
     private static GroundContactImpulseSolver.Result solve(double mass, Vec3d velocity, Vec3d omega,
                                                             double brake, double dt,
                                                             List<GroundContactImpulseSolver.Contact> contacts) {
-        return GroundContactImpulseSolver.solve(velocity, omega,
-            new Vec3d(8000.0, 20000.0, 12000.0), new RotationMatrix(), Vec3d.ZERO,
-            mass, brake, 0.0, dt, contacts);
+        return solve(mass, velocity, omega, new Vec3d(8000.0, 20000.0, 12000.0),
+            brake, dt, contacts);
+    }
+
+    private static GroundContactImpulseSolver.Result solve(double mass, Vec3d velocity, Vec3d omega,
+                                                            Vec3d inertia, double brake, double dt,
+                                                            List<GroundContactImpulseSolver.Contact> contacts) {
+        return GroundContactImpulseSolver.solve(velocity, omega, inertia, new RotationMatrix(),
+            Vec3d.ZERO, mass, brake, 0.0, dt, contacts);
     }
 
     private static List<GroundContactImpulseSolver.Contact> fourWheels(double motive, double lateral) {
@@ -195,8 +277,24 @@ public final class RoadSuspensionRegression {
         return contacts;
     }
 
+    private static List<GroundContactImpulseSolver.Contact> fourWheelsAtHeight(double y,
+                                                                                double motive,
+                                                                                double lateral) {
+        List<GroundContactImpulseSolver.Contact> contacts = new ArrayList<>(4);
+        for (double x : new double[] {-1.0, 1.0}) {
+            for (double z : new double[] {-1.8, 1.8})
+                contacts.add(wheelAt(x, y, z, motive, lateral));
+        }
+        return contacts;
+    }
+
     private static GroundContactImpulseSolver.Contact wheel(double x, double z, double motive, double lateral) {
-        return new GroundContactImpulseSolver.Contact(new Vec3d(x, 0.0, z),
+        return wheelAt(x, 0.0, z, motive, lateral);
+    }
+
+    private static GroundContactImpulseSolver.Contact wheelAt(double x, double y, double z,
+                                                               double motive, double lateral) {
+        return new GroundContactImpulseSolver.Contact(new Vec3d(x, y, z),
             new Vec3d(0.0, 0.0, 1.0), motive, lateral, 0.0, false,
             0.0, true, 0.0, Double.POSITIVE_INFINITY, Double.NaN);
     }

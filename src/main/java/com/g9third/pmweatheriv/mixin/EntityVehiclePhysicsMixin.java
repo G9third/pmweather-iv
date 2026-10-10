@@ -6,11 +6,17 @@ import com.g9third.pmweatheriv.physics.AirframeLoads;
 import com.g9third.pmweatheriv.physics.AirWarningSystem;
 import com.g9third.pmweatheriv.physics.AircraftState;
 import com.g9third.pmweatheriv.physics.AircraftStateAccess;
+import com.g9third.pmweatheriv.physics.AutoTrimOffset;
+import com.g9third.pmweatheriv.physics.AutoTrimPreferences;
 import com.g9third.pmweatheriv.physics.GroundVehicleWind;
 import com.g9third.pmweatheriv.physics.LandingGearSolver;
 import com.g9third.pmweatheriv.physics.GroundVehicleWindStateAccess;
 import com.g9third.pmweatheriv.sable.SableVehicleManager;
 import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
+import minecrafttransportsimulator.items.instances.ItemVehicle;
+import minecrafttransportsimulator.mcinterface.AWrapperWorld;
+import minecrafttransportsimulator.mcinterface.IWrapperNBT;
+import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
@@ -37,6 +43,13 @@ public abstract class EntityVehiclePhysicsMixin implements GroundVehicleWindStat
     @Override
     public GroundVehicleWind.State pmweatherIv$getGroundWindState() {
         return pmweatherIv$groundWindState;
+    }
+
+    @Inject(method = "<init>", at = @At("RETURN"), remap = false)
+    private void pmweatherIv$attachAutoTrimPreferences(AWrapperWorld world, IWrapperPlayer placingPlayer,
+            ItemVehicle item, IWrapperNBT savedData, CallbackInfo callbackInfo) {
+        AutoTrimPreferences.attach((EntityVehicleF_Physics) (Object) this, savedData);
+        AutoTrimOffset.attach((EntityVehicleF_Physics) (Object) this, savedData);
     }
 
     @Inject(method = "getForcesAndMotions", at = @At("HEAD"), cancellable = true, remap = false)

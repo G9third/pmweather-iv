@@ -45,6 +45,13 @@ public final class AutoTrimClient {
             return;
         }
         AutoTrimNetwork.resetClient(minecraft.level, minecraft.level.getGameTime());
+        PartSeat seat = currentControllerSeat(player);
+        if (seat != null && AutoTrimNetwork.consumeFirstEngagementNotice(
+            minecraft.level, seat.vehicleOn.uniqueUUID)) {
+            Component key = TOGGLE.getKey().getDisplayName();
+            player.displayClientMessage(Component.translatable(
+                "hud.pmweather_iv.auto_trim.first_notice", key), false);
+        }
     }
 
     public static void renderBadge(RenderGuiEvent.Post event) {
@@ -58,7 +65,6 @@ public final class AutoTrimClient {
         AutoTrimNetwork.StatusPayload status = AutoTrimNetwork.status(minecraft.level, vehicle.uniqueUUID);
         if (status == null) return;
         AutoTrimController.State state = AutoTrimController.State.values()[status.state()];
-        if (state == AutoTrimController.State.OFF) return;
         AutoTrimNetwork.StatusReason reason = AutoTrimNetwork.StatusReason.values()[status.reason()];
         double trim = status.trim();
         GuiGraphics graphics = event.getGuiGraphics();
@@ -81,9 +87,11 @@ public final class AutoTrimClient {
         String trimValue = String.format(java.util.Locale.ROOT, "%+.1f", trim);
         Component trimText = Component.translatable("hud.pmweather_iv.auto_trim.trim",
             trimValue);
-        Component detail = state == AutoTrimController.State.PAUSED || state == AutoTrimController.State.LIMITED
-            ? reasonAndTrim(minecraft.font, reasonText(reason), trimText, panelWidth - 14)
-            : trimText;
+        Component detail = status.adjusting()
+            ? Component.translatable("hud.pmweather_iv.auto_trim.adjusting", trimValue)
+            : state == AutoTrimController.State.PAUSED || state == AutoTrimController.State.LIMITED
+                ? reasonAndTrim(minecraft.font, reasonText(reason), trimText, panelWidth - 14)
+                : state == AutoTrimController.State.OFF ? reasonText(reason) : trimText;
         graphics.drawString(minecraft.font, fit(minecraft.font, badge, panelWidth - 14),
             x + 7, y + 4, 0xFFE7EEF7, false);
         graphics.drawString(minecraft.font, fit(minecraft.font, detail, panelWidth - 14),

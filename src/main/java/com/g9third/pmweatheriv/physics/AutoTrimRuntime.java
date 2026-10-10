@@ -18,9 +18,21 @@ public final class AutoTrimRuntime {
         long tick
     ) {
         AutoTrimController controller = state.autoTrim;
-        double trim = vehicle.elevatorTrimVar.currentValue;
+        boolean offsetTrim = AutoTrimOffset.usesAuthoredModifierOffset(vehicle);
+        double baseline = offsetTrim && Double.isFinite(state.autoTrimOverlayBaseline)
+            ? state.autoTrimOverlayBaseline
+            : vehicle.elevatorTrimVar.currentValue - (offsetTrim ? AutoTrimOffset.applied(vehicle) : 0.0);
+        double trim = offsetTrim ? AutoTrimOffset.applied(vehicle) : vehicle.elevatorTrimVar.currentValue;
+        double requestedOffset = offsetTrim ? AutoTrimOffset.requested(vehicle) : trim;
+        double minimumTrim = offsetTrim
+            ? AutoTrimOffset.minimumOffset(baseline, EntityVehicleF_Physics.MAX_ELEVATOR_TRIM)
+            : -EntityVehicleF_Physics.MAX_ELEVATOR_TRIM;
+        double maximumTrim = offsetTrim
+            ? AutoTrimOffset.maximumOffset(baseline, EntityVehicleF_Physics.MAX_ELEVATOR_TRIM)
+            : EntityVehicleF_Physics.MAX_ELEVATOR_TRIM;
+        boolean manualTrimChanged = offsetTrim && state.autoTrimOverlayManualTrimChanged;
         if (!controller.enabled()) return new AutoTrimController.Output(trim,
-            AutoTrimController.State.OFF, "OFF", false);
+            AutoTrimController.State.OFF, controller.reason(), false, false);
         if (tick >= state.nextAutoTrimDamageCheck) {
             state.autoTrimDamageSignature = damageSignature(vehicle);
             state.nextAutoTrimDamageCheck = tick + 20;
@@ -40,18 +52,25 @@ public final class AutoTrimRuntime {
             && result.inertia() != null && result.inertia().isFinite()
             && result.torqueBody() != null && result.torqueBody().isFinite()
             && Double.isFinite(trim) && Double.isFinite(result.trueAirspeed())
+            && (!offsetTrim || Double.isFinite(baseline) && Double.isFinite(requestedOffset))
             && Double.isFinite(result.forwardAirspeed()) && Double.isFinite(result.airDensity())
             && Double.isFinite(wingArea) && wingArea > 0.01
             && Double.isFinite(maximumLiftCoefficient) && maximumLiftCoefficient > 0.01
             && Double.isFinite(maxMainWingSeparation)
             && result.centerWind() != null && result.centerWind().windMetersPerSecond().isFinite();
-        if (!finite) return controller.update(new AutoTrimController.Input(
+        if (!finite) {
+            AutoTrimController.Output output = controller.update(new AutoTrimController.Input(
             tick, trim, EntityVehicleF_Physics.MAX_ELEVATOR_TRIM, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, vehicle.elevatorInputVar.currentValue,
             vehicle.flapActualAngleVar.currentValue, vehicle.currentMass,
             0, state.autoTrimDamageSignature, fixedWing, !vehicle.outOfHealth,
-            true, false, vehicle.autopilotValueVar.isActive, false
-        ));
+            true, false, vehicle.autopilotValueVar.isActive, false,
+            minimumTrim, maximumTrim, offsetTrim, manualTrimChanged
+            ));
+            state.autoTrimOverlayManualTrimChanged = false;
+            state.autoTrimOverlayManualTrimDelta = 0.0;
+            return output;
+        }
 
         RotationMatrix orientation = physical.orientation();
         Vec3d forwardWorld = FlightMath.toWorld(orientation, new Vec3d(0.0, 0.0, 1.0)).normalized();
@@ -123,9 +142,13 @@ public final class AutoTrimRuntime {
             vehicle.elevatorInputVar.currentValue, vehicle.flapActualAngleVar.currentValue,
             vehicle.currentMass, inertia.x(), state.autoTrimDamageSignature,
             fixedWing, !vehicle.outOfHealth, held, contact,
-            vehicle.autopilotValueVar.isActive, valuesFinite
+            vehicle.autopilotValueVar.isActive, valuesFinite,
+            minimumTrim, maximumTrim, offsetTrim, manualTrimChanged
         );
-        return controller.update(input);
+        AutoTrimController.Output output = controller.update(input);
+        state.autoTrimOverlayManualTrimChanged = false;
+        state.autoTrimOverlayManualTrimDelta = 0.0;
+        return output;
     }
 
     private static double maximumMainWingSeparation(AircraftState state) {

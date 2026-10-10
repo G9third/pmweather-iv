@@ -12,7 +12,7 @@ PMWeather-IV connects supported IV ground vehicles, fixed-wing aircraft and roto
 to PMWeather Aeronautics and Sable.
 PMAero owns source-native XYZ wind, body pressure and virtual lifting surfaces. Sable owns
 rigid-body motion and detailed collisions; IV retains controls, networking and gameplay.
-Fixed-wing pilots can opt into a native elevator-trim-only level-flight assist.
+Supported fixed-wing aircraft receive a native elevator-trim-only level-flight assist by default; pilots can disable it per aircraft.
 Wind is sampled at force points once per Minecraft tick. Blimps retain IV-native flight.
 '''
 

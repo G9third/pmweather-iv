@@ -13,9 +13,9 @@ import org.joml.Vector3d;
 /** Generic series tire/suspension support for managed road vehicles. */
 public final class RoadSuspensionModel {
     private static final double GRAVITY = 9.80665;
-    private static final double WHEEL_SAG_FRACTION = 0.25;
-    private static final double MIN_WHEEL_SAG_METERS = 0.04;
-    private static final double MAX_WHEEL_SAG_METERS = 0.14;
+    private static final double WHEEL_SAG_FRACTION = 0.18;
+    private static final double MIN_WHEEL_SAG_METERS = 0.035;
+    private static final double MAX_WHEEL_SAG_METERS = 0.11;
     private static final double TREAD_SAG_FRACTION = 0.12;
     private static final double MIN_TREAD_SAG_METERS = 0.02;
     private static final double MAX_TREAD_SAG_METERS = 0.06;
@@ -88,14 +88,30 @@ public final class RoadSuspensionModel {
         if (device == null || device.definition == null || device.definition.ground == null) return 0.0;
         double radius = Math.max(0.0, device.getHeight()) * 0.5;
         if (device.definition.ground.isWheel) {
-            return Vec3d.clamp(radius * WHEEL_SAG_FRACTION,
-                MIN_WHEEL_SAG_METERS, MAX_WHEEL_SAG_METERS);
+            return wheelSagMetersForRadius(radius);
         }
         if (device.definition.ground.isTread) {
             return Vec3d.clamp(radius * TREAD_SAG_FRACTION,
                 MIN_TREAD_SAG_METERS, MAX_TREAD_SAG_METERS);
         }
         return 0.0;
+    }
+
+    static double wheelSagMetersForRadius(double radiusMeters) {
+        if (!Double.isFinite(radiusMeters) || radiusMeters <= 0.0) return 0.0;
+        return Vec3d.clamp(radiusMeters * WHEEL_SAG_FRACTION,
+            MIN_WHEEL_SAG_METERS, MAX_WHEEL_SAG_METERS);
+    }
+
+    /** Fallback series bump envelope, shared by the constraint and pose recovery. */
+    static double maximumSeriesCompressionMeters(double tireDeflectionMeters,
+                                                  double sagMeters,
+                                                  double verticalProjection) {
+        double tire = Double.isFinite(tireDeflectionMeters) ? Math.max(0.0, tireDeflectionMeters) : 0.0;
+        double sag = Double.isFinite(sagMeters) ? Math.max(0.0, sagMeters) : 0.0;
+        double projection = Double.isFinite(verticalProjection)
+            ? Vec3d.clamp(verticalProjection, 0.25, 1.0) : 1.0;
+        return 2.0 * tire + 2.0 * sag * projection;
     }
 
     public static Parameters parameters(PartGroundDevice device, double massKg, int installedSupports) {
@@ -144,7 +160,8 @@ public final class RoadSuspensionModel {
             stiffness = kSuspensionVertical;
             damping = cSuspensionVertical;
         }
-        double maximumCompression = 3.0 * tireDeflection + 3.0 * sag * projection;
+        double maximumCompression = maximumSeriesCompressionMeters(
+            tireDeflection, sag, projection);
         Parameters parameters = new Parameters(cornerMassKg, sag, tireDeflection,
             tireDeflection + sag * projection * projection, stiffness, damping, maximumCompression,
             kSuspension, cSuspension, projection);
@@ -175,7 +192,7 @@ public final class RoadSuspensionModel {
             + dtSeconds * (Math.max(0.0, totalNormalForceNewtons) * projection
                 - stiffness * sagMeters))
             / denominator;
-        return Double.isFinite(next) ? Vec3d.clamp(next, -sagMeters, 2.0 * sagMeters) : 0.0;
+        return Double.isFinite(next) ? Vec3d.clamp(next, -sagMeters, sagMeters) : 0.0;
     }
 
     /**
@@ -256,7 +273,8 @@ public final class RoadSuspensionModel {
         double sag = sagMeters(device);
         double tire = device != null && device.definition.ground.isWheel
             ? TireNormalCompliance.nominalDeflection(device) : 0.0;
-        return Math.max(0.005, 3.0 * tire + 2.0 * sag - Math.max(0.0, skinMeters));
+        return Math.max(0.005, maximumSeriesCompressionMeters(tire, sag, 1.0)
+            - Math.max(0.0, skinMeters));
     }
 
     public static double roadPoseCorrectionMeters(double baseGapMeters, PartGroundDevice device,
@@ -266,7 +284,8 @@ public final class RoadSuspensionModel {
             ? Vec3d.clamp(verticalProjection, 0.25, 1.0) : 1.0;
         double tire = device.definition.ground.isWheel ? TireNormalCompliance.nominalDeflection(device) : 0.0;
         double allowedBasePenetration = Math.max(0.0,
-            3.0 * tire + 2.0 * sagMeters(device) * projection - Math.max(0.0, skinMeters));
+            maximumSeriesCompressionMeters(tire, sagMeters(device), projection)
+                - Math.max(0.0, skinMeters));
         return Math.max(0.0, -baseGapMeters - allowedBasePenetration);
     }
 

@@ -2305,7 +2305,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                 double bodyTravelCorrection = RoadSuspensionModel.roadPoseCorrectionMeters(
                     baseGap, device, verticalProjection, LIVE_GEAR_CONTACT_SKIN_METERS);
                 double tireOrHardwareCorrection =
-                    com.g9third.pmweatheriv.physics.TireNormalCompliance.upwardPoseCorrection(
+                    com.g9third.pmweatheriv.physics.TireNormalCompliance.upwardRoadPoseCorrection(
                         gap, device.definition.ground.isWheel
                             ? com.g9third.pmweatheriv.physics.TireNormalCompliance.nominalDeflection(device)
                             : 0.0,

@@ -161,8 +161,8 @@ tasks.register('checkTraceSchemaRegression', JavaExec) {
     }
 }
 
-['CrashGeometryCacheRegression', 'RigidTerrainContactRegression', 'MovingModelHullRegression', 'ContactLifecycleRegression', 'AnimationEvidenceRegression', 'NetworkStateRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'RoadVehicleCompatibilityRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].each { regression ->
-    def mainName = ['WingMomentRegression', 'ObserverIsolationRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].contains(regression)
+['AutoTrimRegression', 'CrashGeometryCacheRegression', 'RigidTerrainContactRegression', 'MovingModelHullRegression', 'ContactLifecycleRegression', 'AnimationEvidenceRegression', 'NetworkStateRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'RoadVehicleCompatibilityRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].each { regression ->
+    def mainName = ['AutoTrimRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].contains(regression)
         ? "com.g9third.pmweatheriv.physics.${regression}"
         : regression
     def verification = tasks.register("check${regression}", JavaExec) {

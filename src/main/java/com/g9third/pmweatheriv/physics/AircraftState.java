@@ -48,12 +48,31 @@ public final class AircraftState {
     public ModelSurfaceMap.PreparedModel liftingPoseModel;
     public long liftingPoseTick = Long.MIN_VALUE;
     public final AirWarningSystem.State airWarnings = new AirWarningSystem.State();
-    /** Opt-in, owner-tick pitch trim controller; rotorcraft never enter it. */
+    /** Pilot-owned pitch trim controller; rotorcraft never enter it. */
     public final AutoTrimController autoTrim = new AutoTrimController();
     public long nextAutoTrimDamageCheck = Long.MIN_VALUE;
     public int autoTrimDamageSignature;
+    public double autoTrimCommandedTrim = Double.NaN;
+    /** Authored-modifier overlay values; offsets are separate from native pack trim. */
+    public boolean autoTrimOverlayInitialized;
+    public boolean autoTrimOverlayPassActive;
+    public Object autoTrimOverlayDefinition;
+    public boolean autoTrimOverlayDefinitionHasModifier;
+    public int autoTrimOverlayPartCount = -1;
+    public boolean autoTrimOverlayPartsHaveRotor;
+    public double autoTrimOverlayExpectedEffective = Double.NaN;
+    public double autoTrimOverlayBaseline = Double.NaN;
+    public double autoTrimOverlayRequestedOffset;
+    public double autoTrimOverlayAppliedOffset;
+    public double autoTrimOverlayEffectiveTrim = Double.NaN;
+    public boolean autoTrimOverlayManualTrimChanged;
+    public double autoTrimOverlayManualTrimDelta;
+    public boolean autoTrimAdjusting;
+    public boolean autoTrimFirstNoticePending;
+    public long autoTrimFirstNoticeTick = Long.MIN_VALUE;
     public AutoTrimController.State lastAutoTrimStatusState = AutoTrimController.State.OFF;
     public String lastAutoTrimStatusReason = "OFF";
+    public boolean lastAutoTrimStatusAdjusting;
     public long lastAutoTrimStatusTick = Long.MIN_VALUE;
 
     public boolean isPrepared() { return plan != null; }
@@ -95,8 +114,26 @@ public final class AircraftState {
         autoTrim.disable("RESET");
         nextAutoTrimDamageCheck = Long.MIN_VALUE;
         autoTrimDamageSignature = 0;
+        autoTrimCommandedTrim = Double.NaN;
+        autoTrimOverlayInitialized = false;
+        autoTrimOverlayPassActive = false;
+        autoTrimOverlayDefinition = null;
+        autoTrimOverlayDefinitionHasModifier = false;
+        autoTrimOverlayPartCount = -1;
+        autoTrimOverlayPartsHaveRotor = false;
+        autoTrimOverlayExpectedEffective = Double.NaN;
+        autoTrimOverlayBaseline = Double.NaN;
+        autoTrimOverlayRequestedOffset = 0.0;
+        autoTrimOverlayAppliedOffset = 0.0;
+        autoTrimOverlayEffectiveTrim = Double.NaN;
+        autoTrimOverlayManualTrimChanged = false;
+        autoTrimOverlayManualTrimDelta = 0.0;
+        autoTrimAdjusting = false;
+        autoTrimFirstNoticePending = false;
+        autoTrimFirstNoticeTick = Long.MIN_VALUE;
         lastAutoTrimStatusState = AutoTrimController.State.OFF;
         lastAutoTrimStatusReason = "OFF";
+        lastAutoTrimStatusAdjusting = false;
         lastAutoTrimStatusTick = Long.MIN_VALUE;
     }
 }

@@ -1,7 +1,17 @@
 {
+  "config.pmweather_iv.category.general": "General",
+  "config.pmweather_iv.category.auto_trim": "Auto Trim",
+  "config.pmweather_iv.category.air_warnings": "Air Warnings",
+  "config.pmweather_iv.category.terrain_damage": "Terrain Damage",
+  "config.pmweather_iv.general.enabled": "Enable PMWeather-IV Physics",
+  "config.pmweather_iv.auto_trim.enabled": "Enable Automatic Trim",
+  "config.pmweather_iv.air_warnings.wind_shear_threshold": "Wind Shear Warning Threshold (knots)",
+  "config.pmweather_iv.terrain_damage.enable_block_breaking": "Allow Crashes to Break Terrain",
   "key.categories.pmweather_iv": "PMWeather-IV",
-  "key.pmweather_iv.auto_trim_panel": "Toggle aircraft auto trim",
+  "key.pmweather_iv.auto_trim_panel": "Toggle auto trim for this aircraft",
   "hud.pmweather_iv.auto_trim.badge": "Auto trim · %s",
+  "hud.pmweather_iv.auto_trim.first_notice": "Auto trim active. %s toggles it for this plane. Disable for all planes in PMIV config: autoTrim.enabled=false.",
+  "hud.pmweather_iv.auto_trim.adjusting": "Adjusting trim · %s",
   "hud.pmweather_iv.auto_trim.state.off": "Off",
   "hud.pmweather_iv.auto_trim.state.learning": "Learning",
   "hud.pmweather_iv.auto_trim.state.on": "On",
@@ -27,5 +37,7 @@
   "hud.pmweather_iv.auto_trim.reason.unsupported": "Fixed-wing only",
   "hud.pmweather_iv.auto_trim.reason.unavailable": "No flight data",
   "hud.pmweather_iv.auto_trim.reason.restoring_trim": "Restoring trim",
+  "hud.pmweather_iv.auto_trim.reason.config_disabled": "Disabled in config",
+  "hud.pmweather_iv.auto_trim.reason.user_disabled": "Disabled for this aircraft",
   "hud.pmweather_iv.auto_trim.trim": "Trim %s"
 }

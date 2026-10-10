@@ -74,9 +74,17 @@ public final class TireNormalCompliance {
     public static double maximumSolidPenetration(double nominalDeflection, double skin) {
         return Math.max(0.005, 3.0 * Math.max(0.0, nominalDeflection) - Math.max(0.0, skin));
     }
+    /** Road fallback tires share a two-deflection bump envelope with their series suspension. */
+    public static double maximumRoadSolidPenetration(double nominalDeflection, double skin) {
+        return Math.max(0.005, 2.0 * Math.max(0.0, nominalDeflection) - Math.max(0.0, skin));
+    }
     public static double upwardPoseCorrection(double gap, double nominalDeflection, double skin) {
         if (!Double.isFinite(gap) || !Double.isFinite(nominalDeflection) || !Double.isFinite(skin)) return 0.0;
         return Math.max(0.0, -gap - maximumSolidPenetration(nominalDeflection, skin));
+    }
+    public static double upwardRoadPoseCorrection(double gap, double nominalDeflection, double skin) {
+        if (!Double.isFinite(gap) || !Double.isFinite(nominalDeflection) || !Double.isFinite(skin)) return 0.0;
+        return Math.max(0.0, -gap - maximumRoadSolidPenetration(nominalDeflection, skin));
     }
 
     /** The installed count stays fixed during unloading; a lifted wheel cannot stiffen the others. */
