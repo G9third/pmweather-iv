@@ -14,21 +14,22 @@ See the [0.12.0-rc1 release notes](docs/RELEASE-0.12.0-rc1.md), [previous releas
 
 ## Wind display and weather test
 
-With PMWeather Aeronautics installed, `/pmaero` provides the wind and weather-test commands. When PMWeather-IV is installed, it also registers `/pmiv` aliases. The compact wind HUD uses an aircraft's heading while riding and remains visible with chat and ordinary screens open. F1 hides it with the rest of the HUD.
+These public commands use the same `/pmaero` prefix with PMWeather Aeronautics alone or with PMWeather-IV installed. The compact wind HUD uses the vehicle's heading while riding and remains visible with chat and ordinary screens open. F1 hides it with the rest of the HUD.
 
 | Command | Action |
 | --- | --- |
 | `/pmaero wind` | Print one server-sampled wind reading. |
-| `/pmaero live [on\|off]` and `/pmaero wind live [on\|off]` | Show the live wind HUD, show its status, or turn it off. |
-| `/pmiv wind`, `/pmiv live [on\|off]`, and `/pmiv wind live [on\|off]` | PMIV client aliases for the same wind commands. |
-| `/aerowind wind`, `/aerowind live [on\|off]`, `/pmweatheriv wind`, `/pmweatheriv wind live [on\|off]` | Legacy PMIV aliases. |
-| `/pmaero test start [seconds]` | Start the repeatable weather sequence, optionally setting phase length in seconds. |
-| `/pmaero test stress [seconds]` | Start the stress sequence, optionally setting its duration in seconds. |
-| `/pmaero test stop`, `/pmaero test status`, `/pmaero test next` | Stop, inspect, or advance the active sequence. |
-| `/pmaero test list [stress]` | List the regular phases or the stress sequence. |
-| `/pmiv test ...` | PMIV alias for the server weather-test commands. |
+| `/pmaero live on` | Show the live wind HUD. |
+| `/pmaero live off` | Hide the live wind HUD. |
+| `/pmaero test start [secondsPerPhase]` | Start the flight sequence; optionally set seconds per phase. |
+| `/pmaero test stress [secondsPerPhase]` | Start the stress sequence; optionally set seconds per phase. |
+| `/pmaero test status` | Show the active test's status. |
+| `/pmaero test next` | Advance to the next phase. |
+| `/pmaero test stop` | Stop the active test. |
+| `/pmaero test list` | List the flight sequence's phases. |
+| `/pmaero test list stress` | List the stress sequence's phases. |
 
-The legacy `/pmiv weather test ...` and `/aerowind test ...` routes remain available where registered. Test commands require operator permission on the server. The default flight sequence runs 16 phases for 15 seconds each (4 minutes); the full test is capped at 5 minutes. PMAero supplies the authoritative test wind.
+Test commands require operator permission on the server. The default flight sequence runs 16 phases for 15 seconds each (4 minutes); the full test is capped at 5 minutes. PMAero supplies the authoritative test wind.
 
 The private development artifact adds operator-only `/pmiv trace ...` and `/pmiv probe ...` commands. `/pmivtrace` and `/pmivtest` remain aliases. These commands are not included in the public artifact.
 
