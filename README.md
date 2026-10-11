@@ -30,7 +30,7 @@ See the [0.12 release notes](docs/RELEASE-0.12.md), [previous release notes](doc
 
 These public commands use the same `/pmaero` prefix with PMWeather Aeronautics alone or with PMWeather-IV installed. The compact wind HUD uses the vehicle's heading while riding and remains visible with chat and ordinary screens open. F1 hides it with the rest of the HUD.
 
-With PMIV installed, entering an IV aircraft pilot seat automatically enables the shared live wind HUD. This is enabled by default and includes helicopter pilot seats. Disable `display.autoLiveWindInPilotSeat` in `config/pmweather_iv-client.toml` to use manual commands only. `/pmaero live off` keeps the display off until the next pilot-seat entry. Leaving the seat does not hide it.
+With PMIV installed, the shared live wind HUD appears automatically only while occupying an IV aircraft pilot seat, including helicopter pilot seats, and disappears when leaving it. Disable `display.autoLiveWindInPilotSeat` in `config/pmweather_iv-client.toml` to use manual commands only. `/pmaero live on` shows the HUD anywhere until manually disabled; `/pmaero live off` hides it, including for the current pilot seat. Entering a pilot seat again restores automatic display.
 
 | Command | Action |
 | --- | --- |
@@ -64,6 +64,10 @@ The public artifact contains gameplay physics, state synchronization, the wind H
 Minecraft 1.21.1, NeoForge, Immersive Vehicles, PMWeather, Sable and PMWeather Aeronautics 1.0 or later. Install dependency mods separately. Source licensing does not grant redistribution rights for dependency mods or content-pack assets.
 
 ## Current integration
+
+This build requires the matching PMWeather Aeronautics 1.0 **wind revision 3**.
+Same display versions can identify different rebuilds; use the supplied matching artifacts.
+PMWeather 0.17.14 through 0.17.16 is the inspected integration family.
 
 Cars, planes and wheel-equipped helicopters share terrain contact normals and load-bounded
 tire reactions. Authored tire coefficients stay intact. Wheel edge support is approximated

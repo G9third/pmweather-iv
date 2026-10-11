@@ -15,6 +15,7 @@ fixed_files.extend([
  'tools/AutoTrimRegression.java',
  'tools/RigidTerrainContactRegression.java',
  'tools/RoadSuspensionRegression.java',
+ 'tools/WindMonitorVisibilityRegression.java',
 ])
 parser = argparse.ArgumentParser()
 parser.add_argument('--output', type=Path)

@@ -55,8 +55,7 @@ public final class ClientWindMonitor {
     private static WindReading reading = WindReading.UNAVAILABLE;
     private static WindHudState windHudState = WindHudState.WAITING;
     private static boolean liveMonitoring;
-    private static Level pilotSeatLevel;
-    private static java.util.UUID pilotSeatId;
+    private static final WindMonitorVisibility LIVE_VISIBILITY = new WindMonitorVisibility();
     private static long lastRequestGameTick = Long.MIN_VALUE;
     private static long firstRequestGameTick = Long.MIN_VALUE;
     private static long nextRequestId;
@@ -139,8 +138,8 @@ public final class ClientWindMonitor {
         Level currentLevel = minecraft.level;
         com.g9third.pmweatheriv.network.AircraftStateNetwork.resetClientLevel(currentLevel);
         if (currentLevel == null || minecraft.player == null || minecraft.getConnection() == null) {
-            pilotSeatLevel = null;
-            pilotSeatId = null;
+            LIVE_VISIBILITY.clear();
+            reconcileLiveMonitoring();
             resetSamplingState();
             return;
         }
@@ -152,7 +151,7 @@ public final class ClientWindMonitor {
         }
         serverWindChannelKnown = true;
         serverWindChannelAvailable = channelAvailable;
-        enableOnPilotSeatEntry(minecraft.player, currentLevel);
+        updatePilotSeatVisibility(minecraft.player, currentLevel);
         applyLatestServerReading();
         if (currentLevel != null) {
             long tick = currentLevel.getGameTime();
@@ -171,19 +170,18 @@ public final class ClientWindMonitor {
         if (liveMonitoring) requestAuthoritativeWind(false);
     }
 
-    private static void enableOnPilotSeatEntry(Player player, Level level) {
+    private static void updatePilotSeatVisibility(Player player, Level level) {
         PartSeat seat = currentPilotSeat(player);
-        java.util.UUID seatId = seat == null ? null : seat.uniqueUUID;
-        boolean entered = seatId != null && (pilotSeatLevel != level
-            || !java.util.Objects.equals(pilotSeatId, seatId));
-        pilotSeatLevel = level;
-        pilotSeatId = seatId;
-        if (entered && PMIVClientConfig.AUTO_LIVE_WIND_IN_PILOT_SEAT.get() && !liveMonitoring) {
-            // Reuse the normal polling path without clearing an active weather test
-            // or repeatedly overriding a manual HUD-off command in the same seat.
-            liveMonitoring = true;
-            com.g9third.pmweatheriv.devsupport.PMIVObserver.windMonitorLiveChanged(true);
-        }
+        LIVE_VISIBILITY.updatePilotSeat(level, seat == null ? null : seat.uniqueUUID,
+            PMIVClientConfig.AUTO_LIVE_WIND_IN_PILOT_SEAT.get());
+        reconcileLiveMonitoring();
+    }
+
+    private static void reconcileLiveMonitoring() {
+        boolean visible = LIVE_VISIBILITY.visible();
+        if (liveMonitoring == visible) return;
+        liveMonitoring = visible;
+        com.g9third.pmweatheriv.devsupport.PMIVObserver.windMonitorLiveChanged(visible);
     }
 
     private static PartSeat currentPilotSeat(Player player) {
@@ -211,7 +209,8 @@ public final class ClientWindMonitor {
     }
 
     private static int setLive(boolean enabled) {
-        liveMonitoring = enabled;
+        LIVE_VISIBILITY.setManual(enabled);
+        reconcileLiveMonitoring();
         if (enabled) {
             resetSamplingState();
             boolean serverChannel = requestAuthoritativeWind(true);
@@ -224,7 +223,6 @@ public final class ClientWindMonitor {
         } else {
             sendMessage("Live wind display disabled.", ChatFormatting.YELLOW);
         }
-        com.g9third.pmweatheriv.devsupport.PMIVObserver.windMonitorLiveChanged(enabled);
         return 1;
     }
 
