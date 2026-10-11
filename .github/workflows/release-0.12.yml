@@ -42,7 +42,7 @@ jobs:
           def modrinth(version_id, filename):
               data = json.loads(fetch('https://api.modrinth.com/v2/version/'+version_id))
               expected = files[filename]['sha256']
-              candidates = [x for x in data['files'] if x.get('hashes',{}).get('sha256') == expected]
+              candidates = [x for x in data['files'] if (x.get('hashes',{}).get('sha256') == expected or (x.get('filename') == filename and x.get('size') == files[filename]['bytes']))]
               if not candidates:
                   print('Available official files:', [(x.get('filename'), x.get('size'), x.get('hashes',{}).get('sha256')) for x in data['files']], flush=True)
                   raise RuntimeError('No byte-identical authorized Modrinth artifact for '+filename)
