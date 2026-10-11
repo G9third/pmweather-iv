@@ -1,7 +1,7 @@
 {
-  "version": "0.12",
+  "version": "0.12.1",
   "algorithm": "SHA-256",
-  "generatedUtc": "2026-10-11T08:58:57.310713+00:00",
+  "generatedUtc": "2026-10-11T23:17:36.642486+00:00",
   "privateDeveloperSourcesBundled": false,
   "dependencyBinariesBundled": false,
   "contentPackAssetsBundled": false,
@@ -33,8 +33,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 8281,
-      "sha256": "fd997fde6a3ddbadbf31a3c1734a8560fe5ce7f85286ef766d218b9655fafe77"
+      "bytes": 8794,
+      "sha256": "f94b45a7fbf712f09dd09012b15ad88bf34ce0583618a1c62bb75ac0a4b9fc2e"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -48,8 +48,8 @@
     },
     {
       "path": "build.gradle",
-      "bytes": 16708,
-      "sha256": "da2020d19ecefa25ad183a9a98e93c0ebccdfd1169d407a8b6c830ad82a9ef1d"
+      "bytes": 16884,
+      "sha256": "feff7cd4adf5e670fb73b63931bb11b2fb16632e3321d53dc7fe6811d2b435b4"
     },
     {
       "path": "docs/ARCHITECTURE.md",
@@ -87,9 +87,14 @@
       "sha256": "677ab1a4c8e95538d0fccb084e107309f974d58afff789b294b1cc31e5699719"
     },
     {
+      "path": "docs/RELEASE-0.12.1.md",
+      "bytes": 1377,
+      "sha256": "9de4390e4cfba1442e02b583ed83aa42a793fa32c089722bfd8e200e3b382a10"
+    },
+    {
       "path": "docs/RELEASE-0.12.md",
-      "bytes": 806,
-      "sha256": "ca25949fcd7ed8ab17bd5874f06bd3bacf297316a6e738d3eaea09abf540a385"
+      "bytes": 1684,
+      "sha256": "1590c06887f91a7b2905250301d50b0ba513a32d8f3b80701295a85970e4573c"
     },
     {
       "path": "gradle/wrapper/LICENSE",
@@ -108,8 +113,8 @@
     },
     {
       "path": "gradle.properties",
-      "bytes": 213,
-      "sha256": "2a39b88133da67e3273c0cfba964c52d2452ea5025b823d30fe5f007c280f517"
+      "bytes": 215,
+      "sha256": "0597e6df97ca7f1daf55faa6e4e0c1db6ebd06cce264feb302e1de7d30938f11"
     },
     {
       "path": "gradlew",
@@ -138,13 +143,13 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/PMIVClientConfig.java",
-      "bytes": 1000,
-      "sha256": "babeb1015cdba61bc1d80ef27fcfe697b25cc681da72cfa968bc67f6bfb20662"
+      "bytes": 1061,
+      "sha256": "63bad305864b3ae24e5a105f66019ed90e585792abbb6f2eabdad11a8202f99d"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/PMWeatherIV.java",
-      "bytes": 2958,
-      "sha256": "2c60d3a0cd6209ac99f74f978af236c8a4a0739b353dae34b191031146d07221"
+      "bytes": 2960,
+      "sha256": "1a6f54e8175e0769245760a7033cf1a0a43dbc4821a88d65173a3b0fc608d214"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/PMWeatherIVClient.java",
@@ -168,13 +173,18 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/client/ClientWindMonitor.java",
-      "bytes": 32219,
-      "sha256": "fa036b94ec6e85de397908f47777eb64b07370d7cdde8c2c891208432eb12eef"
+      "bytes": 31999,
+      "sha256": "643cd717f227bf9d568fdac4bb77cecb7ee7c67210669a41a2af9a355b62862c"
+    },
+    {
+      "path": "src/main/java/com/g9third/pmweatheriv/client/WindMonitorVisibility.java",
+      "bytes": 1720,
+      "sha256": "6dfb6fe33c534052f5ad0a72242fc553b9f9e523dbebbf52410dd77a49243ca1"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/compat/PMAeroBridge.java",
-      "bytes": 7746,
-      "sha256": "5f3e4c2d614d80565ccde55945090bdedfe0f22224f3a35bb2c02f8834fddda8"
+      "bytes": 7738,
+      "sha256": "225af3170c291c9a3289de4c6dbfa5f9043053d5f37fe3a777449834ae1a1a36"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/compat/StandaloneTrueImpactCompat.java",
@@ -863,8 +873,8 @@
     },
     {
       "path": "src/main/resources/META-INF/neoforge.mods.toml",
-      "bytes": 1489,
-      "sha256": "c248db757c4feadca094f64e293488ee7f1ee8415f559a1ddddf228ab942627a"
+      "bytes": 1500,
+      "sha256": "3813cf082a3eff0e7d9d58eec952165b70c6c98706d6c754a54ed5099c49ff12"
     },
     {
       "path": "src/main/resources/assets/pmweather_iv/lang/en_us.json",
@@ -982,14 +992,19 @@
       "sha256": "fbcff5fd7a2bab6113962cb9788bc9a5737f72bead13267bcb437f5cb3ac6998"
     },
     {
+      "path": "tools/WindMonitorVisibilityRegression.java",
+      "bytes": 3505,
+      "sha256": "d59a104215a4d0e2e6c0d56a28b1cc257b7d84786153a76b6b6b11009989aa66"
+    },
+    {
       "path": "tools/WingMomentRegression.java",
       "bytes": 34620,
       "sha256": "0ecd342ac4f5cc17eac1c1f8fcb0d5449e8ba00f60b5ca4b8007bf020881a64d"
     },
     {
       "path": "tools/package_source.py",
-      "bytes": 3527,
-      "sha256": "f49a092194680028a26c4b97cc8552cc8ceaaa4c617469326bddc911f46fe733"
+      "bytes": 3625,
+      "sha256": "d447c2e45cfa8648ad943216c2605372dbd31d2cd862deca8af54e7920fb4898"
     }
   ]
 }

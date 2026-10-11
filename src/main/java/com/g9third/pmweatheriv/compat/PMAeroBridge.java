@@ -7,7 +7,7 @@ import net.minecraft.world.level.Level;
 import org.joml.Vector3d;
 import com.g9third.pmweatheriv.physics.Vec3d;
 
-/** Required PMAero 1.0 packed API. Failures stop the load update; no second physics law exists. */
+/** Required PMAero packed API. Failures stop the load update; no second physics law exists. */
 public final class PMAeroBridge {
     public static final int WIND_STRIDE = 13;
     public static final int VECTOR_STRIDE = 3;
@@ -49,7 +49,7 @@ public final class PMAeroBridge {
             LIFT = lookup.unreflect(lift.getMethod("evaluatePackedInto", double[].class, double[].class));
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(new IllegalStateException(
-                "PMWeather-IV requires PMWeather Aeronautics 1.0 wind revision 3 and compatible packed APIs", e));
+                "PMWeather-IV requires PMWeather Aeronautics wind revision 3 and compatible packed APIs", e));
         }
     }
 

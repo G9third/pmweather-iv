@@ -1,0 +1,112 @@
+name: Publish PMIV 0.12.1
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-0.12.1.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.repository == 'G9third/pmweather-iv'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download authorized, hash-verified compile dependencies
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, urllib.request, zipfile
+          libs = pathlib.Path('libs')
+          manifest = json.loads((libs/'DEPENDENCIES.json').read_text())
+          files = {x['filename']: x for x in manifest['files']}
+          agent = {'User-Agent': 'PMWeather-IV-build/0.12.1 (compile dependencies only)'}
+          def fetch(url):
+              with urllib.request.urlopen(urllib.request.Request(url, headers=agent), timeout=120) as r:
+                  return r.read(128 * 1024 * 1024 + 1)
+          def save(name, data):
+              entry = files[name]
+              if len(data) != entry['bytes']:
+                  raise RuntimeError(f'{name}: unexpected byte size {len(data)}')
+              digest = hashlib.sha256(data).hexdigest()
+              if digest != entry['sha256']:
+                  raise RuntimeError(f'{name}: SHA-256 mismatch {digest}')
+              (libs/name).write_bytes(data)
+              print(f'Verified {name} ({digest})')
+          def modrinth(version_id, filename):
+              data = json.loads(fetch('https://api.modrinth.com/v2/version/'+version_id))
+              expected = files[filename]['sha256']
+              candidates = [x for x in data['files'] if (x.get('hashes',{}).get('sha256') == expected or (x.get('filename') == filename and x.get('size') == files[filename]['bytes']))]
+              if not candidates:
+                  print('Available official files:', [(x.get('filename'), x.get('size'), x.get('hashes',{}).get('sha256')) for x in data['files']], flush=True)
+                  raise RuntimeError('No byte-identical authorized Modrinth artifact for '+filename)
+              save(filename, fetch(candidates[0]['url']))
+          save('Immersive Vehicles-1.21.1-24.0.0.jar', fetch('https://edge.forgecdn.net/files/7926/606/Immersive%20Vehicles-1.21.1-24.0.0.jar'))
+          modrinth('twmdjNBb','pmweather-1.21.1-0.17.14-alpha.jar')
+          sable = 'sable-neoforge-1.21.1-2.0.5.jar'
+          save(sable, fetch('https://edge.forgecdn.net/files/8673/825/'+sable))
+          with zipfile.ZipFile(libs/sable) as z:
+              save('sable-companion-common-1.21.1-1.6.0.jar',
+                   z.read('META-INF/jarjar/sable-companion-common-1.21.1-1.6.0.jar'))
+          PY
+      - name: Build clean public mod
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon clean jar
+      - name: Verify release metadata and package matching source
+        run: |
+          python3 - <<'PY'
+          import pathlib, zipfile
+          jar = pathlib.Path('build/libs/PMWeather-IV-0.12.1.jar')
+          with zipfile.ZipFile(jar) as z:
+              assert z.testzip() is None
+              assert 'version="0.12.1"' in z.read('META-INF/neoforge.mods.toml').decode()
+              assert b'Implementation-Version: 0.12.1' in z.read('META-INF/MANIFEST.MF')
+              assert 'com/g9third/pmweatheriv/client/AutoTrimClient.class' in z.namelist()
+              assert 'com/g9third/pmweatheriv/client/WindMonitorVisibility.class' in z.namelist()
+              assert '[0.16.4],[0.17.14,0.17.17)' in z.read('META-INF/neoforge.mods.toml').decode()
+              assert not any(x.startswith('com/g9third/pmweatheriv/trace/') for x in z.namelist())
+              assert not any(x.endswith('.jar') for x in z.namelist())
+              assert all('META-INF/licenses/pmweather_iv/'+f in z.namelist()
+                         for f in ('LICENSE','COPYING','COPYING.LESSER','THIRD_PARTY_NOTICES.md'))
+          PY
+          python3 tools/package_source.py --output PMWeather-IV-0.12.1-public-source.zip
+      - name: Record release checksums
+        run: |
+          python3 - <<'PYHASH'
+          import hashlib, pathlib
+          paths = [pathlib.Path('build/libs/PMWeather-IV-0.12.1.jar'), pathlib.Path('PMWeather-IV-0.12.1-public-source.zip')]
+          pathlib.Path('SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in paths))
+          PYHASH
+      - name: Save release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PMWeather-IV-0.12.1
+          path: |
+            build/libs/PMWeather-IV-0.12.1.jar
+            PMWeather-IV-0.12.1-public-source.zip
+            SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish new 0.12.1 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.12.1 >/dev/null 2>&1; then
+            echo 'Release v0.12.1 already exists; refusing to replace it.' >&2
+            exit 1
+          fi
+          gh release create v0.12.1 \
+            build/libs/PMWeather-IV-0.12.1.jar \
+            PMWeather-IV-0.12.1-public-source.zip \
+            SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title 'PMWeather-IV 0.12.1' \
+            --notes-file docs/RELEASE-0.12.1.md \
+            --latest

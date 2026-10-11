@@ -1,4 +1,4 @@
-# PMWeather-IV 0.12
+# PMWeather-IV 0.12.1
 
 Standalone Immersive Vehicles addon connecting ground vehicles and aircraft to PMWeather Aeronautics and persistent Sable/Rapier physics.
 
@@ -24,7 +24,7 @@ Please report content-pack incompatibilities or unexpected behavior across cars,
 
 The public config keeps player-facing switches for general physics, the wind-shear warning threshold and terrain block breaking. Auto trim is enabled per aircraft with the key and has no global config toggle. Internal aerodynamic coefficients and model sampling budgets now use the reviewed defaults in code. Older config files may retain those retired entries, but PMIV no longer reads them. The existing `terrainDamage.enableBlockBreaking` setting still controls crash terrain removal and continues to require IV's own global block-breaking setting.
 
-See the [0.12 release notes](docs/RELEASE-0.12.md), [previous release notes](docs/RELEASE-0.11.53.md), [architecture](docs/ARCHITECTURE.md) and [notices](THIRD_PARTY_NOTICES.md) for behavior, supported modes and limitations.
+See the [0.12.1 release notes](docs/RELEASE-0.12.1.md), [0.12 release notes](docs/RELEASE-0.12.md), [previous release notes](docs/RELEASE-0.11.53.md), [architecture](docs/ARCHITECTURE.md) and [notices](THIRD_PARTY_NOTICES.md) for behavior, supported modes and limitations.
 
 ## Wind display and weather test
 
@@ -61,7 +61,17 @@ The public artifact contains gameplay physics, state synchronization, the wind H
 
 ## Runtime dependencies
 
-Minecraft 1.21.1, NeoForge, Immersive Vehicles, PMWeather, Sable and PMWeather Aeronautics 1.0 or later. Install dependency mods separately. Source licensing does not grant redistribution rights for dependency mods or content-pack assets.
+Minecraft 1.21.1, NeoForge, Immersive Vehicles 24 or later, Sable 2.0.5 through 2.x,
+PMWeather and PMWeather Aeronautics. Install dependency mods separately.
+
+- **PMWeather 0.16.4 requires PMAero 1.1 or later** for the native XYZ compatibility adapter, including vertical tornado wind.
+- **PMWeather 0.17.14 through 0.17.16** retain support with PMAero 1.0 or later using the required wind revision 3 and packed API version 2.
+- Other PMWeather versions are not declared supported.
+
+Get the current PMAero source and build instructions from [PMWeather Aeronautics](https://github.com/G9third/pmweather-aeronautics).
+The 0.16.4 compatibility path is selected by PMAero automatically. PMIV uses the same
+wind API and adds no PMWeather weather calculation. Source licensing does not grant
+redistribution rights for dependency mods or content-pack assets.
 
 ## Current integration
 
