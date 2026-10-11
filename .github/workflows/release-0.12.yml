@@ -46,8 +46,7 @@ jobs:
               if not candidates:
                   raise RuntimeError('No byte-identical authorized Modrinth artifact for '+filename)
               save(filename, fetch(candidates[0]['url']))
-          save('Immersive Vehicles-1.21.1-24.0.0.jar',
-      fetch('https://edge.forgecdn.net/files/7926/606/Immersive%20Vehicles-1.21.1-24.0.0.jar'))
+          save('Immersive Vehicles-1.21.1-24.0.0.jar', fetch('https://edge.forgecdn.net/files/7926/606/Immersive%20Vehicles-1.21.1-24.0.0.jar'))
           modrinth('twmdjNBb','pmweather-1.21.1-0.17.14-alpha.jar')
           sable = 'sable-neoforge-1.21.1-2.0.5.jar'
           save(sable, fetch('https://edge.forgecdn.net/files/8673/825/'+sable))
