@@ -164,6 +164,11 @@ public final class SableCollisionGameplay {
             ++terrainContacts;
             double preImpactSpeed = preImpactVehicleSpeed(body, snapshot, contact);
             double closingSpeed = preImpactNormalSpeed(body, snapshot, contact);
+            // Rapier's own-body normal points into terrain; the policy uses
+            // the same outward convention as the swept terrain solver.
+            boolean damageEligible = body.classifyTerrainImpact(
+                contact.worldNormal() == null ? null : new Vector3d(contact.worldNormal()).negate(),
+                closingSpeed, contact.impulseNewtonSeconds()).damageEligible();
             maxImpulse = Math.max(maxImpulse, contact.impulseNewtonSeconds());
             maxImpulseDeltaV = Math.max(maxImpulseDeltaV, contact.impulseNewtonSeconds() / mass);
             maxClosing = Math.max(maxClosing, closingSpeed);
@@ -186,7 +191,7 @@ public final class SableCollisionGameplay {
                     Math.max(0.0, contact.impulseNewtonSeconds()),
                     Math.max(0.0, contact.forceNewtons()),
                     Float.NaN, null,
-                    "RAPIER_CONTACT"
+                    "RAPIER_CONTACT", damageEligible
                 ));
             }
         }
@@ -211,7 +216,7 @@ public final class SableCollisionGameplay {
                 copy(impact.worldPoint()), copy(impact.worldNormal()),
                 preImpactSpeed, closingSpeed, impulse, 0.0,
                 impact.preImpactBlockHardness(), impact.trueImpactResolution(),
-                "SABLE_SWEPT_CCD"
+                "SABLE_SWEPT_CCD", impact.terrainDamageEligible()
             ));
         }
 
@@ -274,7 +279,8 @@ public final class SableCollisionGameplay {
             // outOfHealth bit.  Once the wreck has remained settled below the
             // structural-point-speed threshold for the hysteresis window, the gate
             // latches closed permanently for that wreck.
-            boolean trueImpactSubmissionAllowed = body.terrainDamageAllowedForCurrentCrashEpisode();
+            boolean trueImpactSubmissionAllowed = evidence.terrainDamageEligible()
+                && body.terrainDamageAllowedForCurrentCrashEpisode();
             Resolution preResolved =
                 evidence.trueImpactResolution();
 
@@ -292,7 +298,7 @@ public final class SableCollisionGameplay {
             // authored IV crash-speed threshold. The episode begins before any fatal
             // IV health mutation exactly as in 0.11.5.
             double episodeCrashMin = Math.max(0.0, vehicle.definition.motorized.crashSpeedMin);
-            if (!vehicle.outOfHealth && hitBlock && trueImpactEnergyJ > 0.0
+            if (evidence.terrainDamageEligible() && !vehicle.outOfHealth && hitBlock && trueImpactEnergyJ > 0.0
                 && nativeIvCrashSpeed > episodeCrashMin) {
                 body.noteCrashEpisodeImpact(
                     trueImpactEnergyJ, Math.max(0.0, evidence.impulseNewtonSeconds())
@@ -319,7 +325,7 @@ public final class SableCollisionGameplay {
                     double acceptedEnergy = AircraftTerrainImpact.submitExternalWorldImpact(
                         body.level(), blockPos, evidence.worldNormal(),
                         Math.max(0.0, evidence.impulseNewtonSeconds()),
-                        physicalNormalImpactSpeedMps
+                        physicalNormalImpactSpeedMps, vehicle.uniqueUUID
                     );
                     trueImpactSubmitted = acceptedEnergy > 0.0;
                     if (trueImpactSubmitted) {
@@ -335,12 +341,13 @@ public final class SableCollisionGameplay {
                     // IV's legacy no-crashMax vehicle-destruction fallback still needs
                     // an authored terrain-hardness accumulator. Terrain fracture itself
                     // is entirely owned by True Impact.
-                    totalLegacyCrashHardness += Math.max(0.0F, hardness);
+                    totalLegacyCrashHardness += legacyImpactHardness(hardness, preResolved);
                 }
             }
 
             boolean destroyThisImpact = false;
-            if (ConfigSystem.settings.damage.vehicleDestruction.value && vehicle.isValid
+            if (evidence.terrainDamageEligible()
+                && ConfigSystem.settings.damage.vehicleDestruction.value && vehicle.isValid
                 && !vehicle.outOfHealth) {
                 double crashMax = vehicle.definition.motorized.crashSpeedMax;
                 if (crashMax > 0.0) {
@@ -615,6 +622,15 @@ public final class SableCollisionGameplay {
         }
     }
 
+    static double legacyImpactHardness(float seedHardness, Resolution material) {
+        double seed = Float.isFinite(seedHardness) ? Math.max(0.0F, seedHardness) : 0.0;
+        if (material == null || !material.accepted() || material.blocksBroken() <= 0
+            || !Double.isFinite(material.brokenTerrainHardness())) return seed;
+        // The fractured set already includes the seed voxel. Retain IV's
+        // hardness-based fallback without counting that voxel twice.
+        return Math.max(seed, material.brokenTerrainHardness());
+    }
+
     private static boolean stronger(ImpactEvidence candidate, ImpactEvidence current) {
         boolean candidatePreResolved = candidate.trueImpactResolution() != null
             && candidate.trueImpactResolution().accepted();
@@ -622,6 +638,9 @@ public final class SableCollisionGameplay {
             && current.trueImpactResolution().accepted();
         if (candidatePreResolved != currentPreResolved) {
             return candidatePreResolved;
+        }
+        if (candidate.terrainDamageEligible() != current.terrainDamageEligible()) {
+            return candidate.terrainDamageEligible();
         }
         if (candidate.preImpactVehicleSpeedMps() > current.preImpactVehicleSpeedMps() + 1.0E-9) {
             return true;
@@ -744,6 +763,7 @@ public final class SableCollisionGameplay {
         return "SABLE_CRASH_CONTACT gameTime=" + simulationGameTime(vehicle)
             + " uuid=" + vehicle.uniqueUUID
             + " evidence=" + evidence.evidenceSource()
+            + " terrainDamageEligible=" + evidence.terrainDamageEligible()
             + " block=(" + (int) evidence.block().x + "," + (int) evidence.block().y
             + "," + (int) evidence.block().z + ")"
             + " worldPoint=" + vectorDiagnostic(evidence.worldPoint())
@@ -807,7 +827,8 @@ public final class SableCollisionGameplay {
         double forceNewtons,
         float preImpactBlockHardness,
         Resolution trueImpactResolution,
-        String evidenceSource
+        String evidenceSource,
+        boolean terrainDamageEligible
     ) {
     }
 

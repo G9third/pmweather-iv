@@ -4,7 +4,7 @@ license="LGPL-3.0-only"
 
 [[mods]]
 modId="pmweather_iv"
-version="0.12.0-rc1"
+version="0.12"
 displayName="PMWeather Immersive Vehicles"
 authors="G9third"
 description='''
@@ -12,7 +12,7 @@ PMWeather-IV connects supported IV ground vehicles, fixed-wing aircraft and roto
 to PMWeather Aeronautics and Sable.
 PMAero owns source-native XYZ wind, body pressure and virtual lifting surfaces. Sable owns
 rigid-body motion and detailed collisions; IV retains controls, networking and gameplay.
-Supported fixed-wing aircraft receive a native elevator-trim-only level-flight assist by default; pilots can disable it per aircraft.
+Auto trim is off by default. Pilots can toggle elevator-trim-only level-flight assistance per supported fixed-wing aircraft with Right Alt.
 Wind is sampled at force points once per Minecraft tick. Blimps retain IV-native flight.
 '''
 
@@ -43,7 +43,7 @@ side="BOTH"
 [[dependencies.pmweather_iv]]
 modId="pmweather"
 type="required"
-versionRange="[0.17.14,)"
+versionRange="[0.17.14,0.17.17)"
 ordering="AFTER"
 side="BOTH"
 

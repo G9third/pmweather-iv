@@ -6,14 +6,10 @@ import com.g9third.pmweatheriv.physics.AircraftState;
 import com.g9third.pmweatheriv.physics.AutoTrimController;
 import com.g9third.pmweatheriv.physics.AutoTrimOffset;
 import com.g9third.pmweatheriv.physics.AutoTrimPreferences;
-import com.g9third.pmweatheriv.PMWeatherIVConfig;
 import com.g9third.pmweatheriv.devsupport.PMIVObserver;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import mcinterface1211.BuilderEntityLinkedSeat;
@@ -38,8 +34,6 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 public final class AutoTrimNetwork {
     private static final Map<ServerPlayer, Long> LAST_TOGGLE_REQUEST = new WeakHashMap<>();
     private static final Map<StatusKey, StatusPayload> CLIENT_STATUS = new HashMap<>();
-    private static final Map<UUID, Long> CLIENT_FIRST_NOTICE_PENDING = new LinkedHashMap<>();
-    private static final Set<UUID> CLIENT_NOTIFIED_PLANES = new LinkedHashSet<>();
     private static ResourceLocation clientDimension;
     private static Level clientLevel;
     private static long lastClientPruneTick = Long.MIN_VALUE;
@@ -68,35 +62,13 @@ public final class AutoTrimNetwork {
         double controllerTrim = AutoTrimOffset.usesAuthoredModifierOffset(vehicle)
             ? AutoTrimOffset.applied(vehicle) : vehicle.elevatorTrimVar.currentValue;
         AircraftState state = ((AircraftStateAccess) vehicle).pmweatherIv$getAircraftState();
-        if (!PMWeatherIVConfig.autoTrimEnabled()) {
-            AutoTrimOffset.freezeAtAppliedOffset(vehicle);
-            state.autoTrim.disable("CONFIG_DISABLED");
-            state.lastAutoTrimStatusState = state.autoTrim.state();
-            state.lastAutoTrimStatusReason = state.autoTrim.reason();
-            state.lastAutoTrimStatusAdjusting = false;
-            state.lastAutoTrimStatusTick = tick;
-            sendStatus(player, vehicle, state, level);
-            return;
-        }
-        if (state.plan != null && state.plan.rotorcraft()) {
-            state.autoTrim.disable("UNSUPPORTED");
-            state.lastAutoTrimStatusState = state.autoTrim.state();
-            state.lastAutoTrimStatusReason = state.autoTrim.reason();
-            state.lastAutoTrimStatusAdjusting = false;
-            state.lastAutoTrimStatusTick = tick;
-            sendStatus(player, vehicle, state, level);
-            return;
-        }
-        if (AutoTrimPreferences.disabled(vehicle)) {
-            AutoTrimPreferences.setDisabled(vehicle, false);
-            if (state.plan != null) {
-                state.autoTrim.enable(player.getUUID(), controllerTrim);
-            } else {
-                state.autoTrim.disable("UNAVAILABLE");
-            }
+        if (state.plan == null || state.plan.rotorcraft()) return;
+        if (!AutoTrimPreferences.enabled(vehicle)) {
+            AutoTrimPreferences.setEnabled(vehicle, true);
+            state.autoTrim.enable(player.getUUID(), controllerTrim);
             state.nextAutoTrimDamageCheck = Long.MIN_VALUE;
         } else {
-            AutoTrimPreferences.setDisabled(vehicle, true);
+            AutoTrimPreferences.setEnabled(vehicle, false);
             AutoTrimOffset.freezeAtAppliedOffset(vehicle);
             state.autoTrim.disable("USER_DISABLED");
             state.nextAutoTrimDamageCheck = Long.MIN_VALUE;
@@ -114,7 +86,7 @@ public final class AutoTrimNetwork {
                 + " currentTrim=" + vehicle.elevatorTrimVar.currentValue
                 + " requestedTrim=" + (AutoTrimOffset.usesAuthoredModifierOffset(vehicle)
                     ? AutoTrimOffset.requested(vehicle) : vehicle.elevatorTrimVar.currentValue)
-                + " optedOut=" + AutoTrimPreferences.disabled(vehicle));
+                + " optedIn=" + AutoTrimPreferences.enabled(vehicle));
         }
         sendStatus(player, vehicle, state, level);
     }
@@ -154,15 +126,11 @@ public final class AutoTrimNetwork {
 
     public static void sendStatus(ServerPlayer player, EntityVehicleF_Physics vehicle,
                                   AircraftState state, ServerLevel level) {
-        sendStatus(player, vehicle, state, level, false);
-    }
-
-    public static void sendStatus(ServerPlayer player, EntityVehicleF_Physics vehicle,
-                                  AircraftState state, ServerLevel level, boolean firstEngagementNotice) {
         if (player == null || vehicle == null || state == null || level == null
             || !player.isAlive() || player.level() != level) return;
         AutoTrimController controller = state.autoTrim;
-        byte flags = (byte) ((state.autoTrimAdjusting ? 1 : 0) | (firstEngagementNotice ? 2 : 0));
+        // Bit 1 remains reserved for old clients' first-engagement notice.
+        byte flags = (byte) (state.autoTrimAdjusting ? 1 : 0);
         StatusPayload payload = new StatusPayload(vehicle.uniqueUUID,
             level.dimension().location(), level.getGameTime(),
             vehicle.elevatorTrimVar.currentValue, (byte) controller.state().ordinal(),
@@ -201,8 +169,6 @@ public final class AutoTrimNetwork {
         ResourceLocation dimension = level == null ? null : level.dimension().location();
         if (clientLevel != level || !java.util.Objects.equals(clientDimension, dimension)) {
             CLIENT_STATUS.clear();
-            CLIENT_FIRST_NOTICE_PENDING.clear();
-            CLIENT_NOTIFIED_PLANES.clear();
             clientDimension = dimension;
             clientLevel = level;
             lastClientPruneTick = Long.MIN_VALUE;
@@ -213,11 +179,6 @@ public final class AutoTrimNetwork {
             while (iterator.hasNext()) {
                 StatusPayload payload = iterator.next().getValue();
                 if (!payload.dimension().equals(dimension) || now - payload.tick() > 100L) iterator.remove();
-            }
-            Iterator<Map.Entry<UUID, Long>> noticeIterator = CLIENT_FIRST_NOTICE_PENDING.entrySet().iterator();
-            while (noticeIterator.hasNext()) {
-                Map.Entry<UUID, Long> entry = noticeIterator.next();
-                if (now - entry.getValue() > 100L) noticeIterator.remove();
             }
             lastClientPruneTick = clientTick;
         }
@@ -230,28 +191,7 @@ public final class AutoTrimNetwork {
         StatusPayload previous = CLIENT_STATUS.get(key);
         if (previous == null || payload.tick() >= previous.tick()) {
             CLIENT_STATUS.put(key, payload);
-            if (payload.firstEngagementNotice() && !CLIENT_NOTIFIED_PLANES.contains(payload.aircraft())) {
-                CLIENT_FIRST_NOTICE_PENDING.put(payload.aircraft(), payload.tick());
-                while (CLIENT_FIRST_NOTICE_PENDING.size() > 128) {
-                    CLIENT_FIRST_NOTICE_PENDING.remove(CLIENT_FIRST_NOTICE_PENDING.keySet().iterator().next());
-                }
-            }
         }
-    }
-
-    /** Latches first-adjustment notices until the pilot is confirmed back in that seat. */
-    public static boolean consumeFirstEngagementNotice(Level level, UUID aircraft) {
-        if (level == null || aircraft == null) return false;
-        resetClient(level, level.getGameTime());
-        Long tick = CLIENT_FIRST_NOTICE_PENDING.remove(aircraft);
-        if (tick == null || level.getGameTime() - tick > 100L) return false;
-        StatusPayload current = CLIENT_STATUS.get(new StatusKey(level.dimension().location(), aircraft));
-        if (current == null || current.state() == (byte) AutoTrimController.State.OFF.ordinal()) return false;
-        CLIENT_NOTIFIED_PLANES.add(aircraft);
-        while (CLIENT_NOTIFIED_PLANES.size() > 128) {
-            CLIENT_NOTIFIED_PLANES.remove(CLIENT_NOTIFIED_PLANES.iterator().next());
-        }
-        return true;
     }
 
     private record StatusKey(ResourceLocation dimension, UUID aircraft) {}

@@ -12,6 +12,7 @@ import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.UUID;
 import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -170,6 +171,20 @@ public final class PMIVObserver {
             trueImpactResidualInwardSpeedMps, trueImpactBlocksBroken);
     }
 
+    /** Reports the actual deferred terrain result for an originating managed vehicle. */
+    public static void captureDeferredTerrainImpact(UUID vehicleUuid, long gameTime, BlockPos block,
+            double energyJ, boolean blockBroken, boolean blockCompacted) {
+        observer.captureDeferredTerrainImpact(vehicleUuid, gameTime, block,
+            energyJ, blockBroken, blockCompacted);
+    }
+
+    /** Reports support-contact evidence and the policy decision made by the physics caller. */
+    public static void captureSupportTerrainContact(UUID vehicleUuid, long gameTime,
+            double inward, boolean fresh, boolean damageEligible, String reason) {
+        observer.captureSupportTerrainContact(vehicleUuid, gameTime,
+            inward, fresh, damageEligible, reason);
+    }
+
     public static void vehicleRemoved(UUID uuid, String reason) {
         observer.vehicleRemoved(uuid, reason);
     }
@@ -249,6 +264,10 @@ public final class PMIVObserver {
                 double projectedContactAreaM2, boolean trueImpactPreResolved, String trueImpactMode,
                 double trueImpactEnergyJ, double trueImpactAbsorbedEnergyJ, double trueImpactResidualEnergyJ,
                 double trueImpactResidualInwardSpeedMps, int trueImpactBlocksBroken) {}
+        default void captureDeferredTerrainImpact(UUID vehicleUuid, long gameTime, BlockPos block,
+                double energyJ, boolean blockBroken, boolean blockCompacted) {}
+        default void captureSupportTerrainContact(UUID vehicleUuid, long gameTime,
+                double inward, boolean fresh, boolean damageEligible, String reason) {}
         default void vehicleRemoved(UUID uuid, String reason) {}
         default void onServerStarted(ServerStartedEvent event) {}
         default void onServerStopping(ServerStoppingEvent event) {}

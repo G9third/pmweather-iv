@@ -79,12 +79,14 @@ public class TerrainGeometryRegression {
 
     @SuppressWarnings("unchecked")
     public static void main(String[] args) throws Exception {
+        airColumnProofs();
         String owner = "com.g9third.pmweatheriv.sable.SableTerrainSweep";
         Class<?> c = Class.forName(owner);
         Class<?> shape = Class.forName(owner + "$OrientedCuboid");
         Constructor<?> constructor = shape.getDeclaredConstructors()[0];
         constructor.setAccessible(true);
         Method sat = method(c, "satContact", 2);
+        Method patch = method(c, "contactPoint", 3);
         Method area = method(c, "projectedAreaSquareMeters", 2);
         AABB block = new AABB(-.5, -.5, -.5, .5, .5, .5);
 
@@ -140,6 +142,22 @@ public class TerrainGeometryRegression {
             } else {
                 ++contacts;
                 validateContact(contact);
+                Method normal = contact.getClass().getDeclaredMethod("normalWorld");
+                normal.setAccessible(true);
+                Vector3d point = (Vector3d) patch.invoke(null, obb, block, normal.invoke(contact));
+                require(point.x >= block.minX-1e-7 && point.x <= block.maxX+1e-7
+                    && point.y >= block.minY-1e-7 && point.y <= block.maxY+1e-7
+                    && point.z >= block.minZ-1e-7 && point.z <= block.maxZ+1e-7,
+                    "SAT contact patch must belong to the actual terrain voxel");
+                Vector3d lever = new Vector3d(point).sub(center);
+                for (String axisName : List.of("X", "Y", "Z")) {
+                    Method axis = shape.getDeclaredMethod("axis"+axisName);
+                    Method extent = shape.getDeclaredMethod("h"+axisName.toLowerCase(Locale.ROOT));
+                    axis.setAccessible(true); extent.setAccessible(true);
+                    double projectedLever = Math.abs(lever.dot((Vector3d)axis.invoke(obb)));
+                    require(projectedLever <= ((Number)extent.invoke(obb)).doubleValue()+1e-7,
+                        "SAT contact patch must also belong to the vehicle cuboid");
+                }
             }
             double projected = ((Number) area.invoke(
                 null, obb, new Vector3d(1, 2, 3).normalize()
@@ -176,4 +194,22 @@ public class TerrainGeometryRegression {
 
         System.out.println("TerrainGeometryRegression: invariants passed");
     }
+    private static void airColumnProofs() throws Exception {
+        Class<?> c=Class.forName("com.g9third.pmweatheriv.sable.SableTerrainSweep$AirColumnProofCache");
+        Constructor<?> constructor=c.getDeclaredConstructor(); constructor.setAccessible(true);
+        Object cache=constructor.newInstance();
+        Method proves=method(c,"proves",5), remember=method(c,"remember",5), clear=method(c,"clear",0);
+        require(!(boolean)proves.invoke(cache,0,70,0,15,15),"empty cache proves nothing");
+        remember.invoke(cache,0,64,0,15,15);
+        require((boolean)proves.invoke(cache,0,64,0,15,15),"exact height boundary is air");
+        require((boolean)proves.invoke(cache,2,70,3,10,12),"contained footprint reuses exact air proof");
+        require(!(boolean)proves.invoke(cache,0,63,0,15,15),"lower cuboid still queries terrain");
+        require(!(boolean)proves.invoke(cache,-1,70,0,15,15),"unseen column cannot inherit air proof");
+        for(int i=0;i<40;++i) remember.invoke(cache,100+i,64,100,100+i,100);
+        require(!(boolean)proves.invoke(cache,0,64,0,15,15),"bounded cache evicts old proof");
+        require((boolean)proves.invoke(cache,139,64,100,139,100),"newest proof survives wrap");
+        clear.invoke(cache);
+        require(!(boolean)proves.invoke(cache,139,64,100,139,100),"fracture clears height proof");
+    }
+
 }

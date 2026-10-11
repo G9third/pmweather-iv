@@ -2,12 +2,14 @@ package com.g9third.pmweatheriv.mixin;
 
 import com.g9third.pmweatheriv.sable.OrientedDamageQuery;
 import com.g9third.pmweatheriv.sable.OrientedHitboxRegistry;
+import com.g9third.pmweatheriv.sable.OrientedEntityAabb;
 import mcinterface1211.WrapperWorld;
 import java.util.List;
 import minecrafttransportsimulator.baseclasses.BoundingBox;
 import minecrafttransportsimulator.baseclasses.Damage;
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.mcinterface.IWrapperEntity;
+import minecrafttransportsimulator.jsondefs.JSONCollisionGroup.CollisionType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import org.spongepowered.asm.mixin.Mixin;
@@ -43,6 +45,15 @@ public abstract class WrapperWorldMixin {
         BoundingBox box,
         CallbackInfoReturnable<AABB> callbackInfo
     ) {
+        if (OrientedHitboxRegistry.contains(box) && box.collisionTypes != null
+            && box.collisionTypes.contains(CollisionType.ENTITY)) {
+            OrientedHitboxRegistry.WorldAabb exactBounds =
+                OrientedHitboxRegistry.conservativeWorldAabbForQuery(box, null, false);
+            if (exactBounds != null) {
+                callbackInfo.setReturnValue(new OrientedEntityAabb(box, exactBounds));
+                return;
+            }
+        }
         OrientedHitboxRegistry.WorldAabb bounds = OrientedHitboxRegistry.conservativeWorldAabb(box);
         if (bounds != null) {
             callbackInfo.setReturnValue(new AABB(

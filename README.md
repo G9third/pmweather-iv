@@ -1,20 +1,36 @@
-# PMWeather-IV 0.12.0-rc1
+# PMWeather-IV 0.12
 
 Standalone Immersive Vehicles addon connecting ground vehicles and aircraft to PMWeather Aeronautics and persistent Sable/Rapier physics.
 
-Ground vehicles share aircraft body collision, terrain recovery and integrated True Impact handling. IV retains drivetrain, controls and content-pack tire coefficients; road drive/braking acts through physical load-bounded tire contacts. Eligible road wheels and treads use a bounded series tire/suspension travel model unless the pack already authors vertical support motion. Compatibility follows authored features and geometry. Helicopters retain the assisted controller.
+Ground vehicles share aircraft body collision, terrain recovery and integrated True Impact handling. IV retains drivetrain, controls and content-pack tire coefficients; road drive/braking acts through physical load-bounded tire contacts. Wheel positions and suspension animations come from the content pack. PMIV adds no suspension travel; wind-driven body roll and tipping follow physical loads at those authored contact points. Compatibility follows authored features and geometry. Helicopters retain the assisted controller.
 
-Auto trim is off by default. When you enter the pilot seat of a supported fixed-wing aircraft, a brief centered popup shows the key to enable or disable it. Press **Right Alt** (default; rebind it under Controls) to toggle auto trim for that aircraft. The corner badge shows when it is adjusting elevator trim. Your choice is stored per aircraft and persists through dismount and save/reload. There is no global auto-trim config toggle.
+Road tires retain ordinary pack grip. On grass and loose terrain, excessive weather loading gradually enables a lower sliding-grip limit using actual wheel support. Drive and brakes share that contact budget. Pavement coefficients and airborne aerodynamics are unchanged. This compatibility correction preserves normal handling; its generic soil limits are approximations rather than measurements for every pack tire.
+
+Road wind breakaway limits differ for grass, dirt/clay, gravel, sand, snow and ice, including wet surfaces. These limits are capped by the pack's own tire coefficients and take effect only when tangential weather force exceeds the terrain's available support-based grip. The transition reaches full sliding correction at 10% overload and retains the existing time smoothing. IV material categories and block slipperiness determine the underlying contact properties; Sable friction datapacks do not currently configure PMIV tire grip.
+
+IV particle wind preserves stationary surface effects such as tire marks, bullet decals and water ripples, plus stationary fixed blast effects and brief flashes. Authored movement and orientation determine eligibility; smoke remains eligible for wind even when a pack caps its native velocity to zero. Attached effects, streaks, trails and fluid-bound particles retain their existing exclusions. Classification is cached once per particle, and eligible particles share PMAero's bounded wind cache.
+
+Auto trim is off by default. Press **Right Alt** to enable it for the current supported
+fixed-wing aircraft; press it again to turn it off. The entire auto-trim HUD is hidden
+while auto trim is off, except for the brief enable/disable key hint shown on
+entering a supported pilot seat. When enabled, the compact instrument label shows
+live trim angle and status. The choice is stored per
+aircraft and persists through dismount and save/reload. See Controls to rebind the key.
+There is no global auto-trim config toggle.
+
+The displayed angle is live server trim, not a target. Auto trim uses IV's native 0.1-degree manual increment as its maximum and respects slower linear held-button trim controls identified in the pack. Authored surface animation timing remains unchanged; unsupported custom actuator definitions cannot be inferred automatically.
 
 Please report content-pack incompatibilities or unexpected behavior across cars, tanks, APCs, planes and helicopters at [PMWeather-IV Issues](https://github.com/G9third/pmweather-iv/issues). Include the pack name and version, mod versions, and what happened. A development trace is optional.
 
-The public config keeps player-facing switches for general physics, the wind-shear warning threshold and terrain block breaking. Auto trim is toggled per aircraft in game and has no global config toggle. Internal aerodynamic coefficients and model sampling budgets use the reviewed defaults in code. Older config files may retain retired entries, but PMIV no longer reads them. The existing `terrainDamage.enableBlockBreaking` setting still controls crash terrain removal and continues to require IV's own global block-breaking setting.
+The public config keeps player-facing switches for general physics, the wind-shear warning threshold and terrain block breaking. Auto trim is enabled per aircraft with the key and has no global config toggle. Internal aerodynamic coefficients and model sampling budgets now use the reviewed defaults in code. Older config files may retain those retired entries, but PMIV no longer reads them. The existing `terrainDamage.enableBlockBreaking` setting still controls crash terrain removal and continues to require IV's own global block-breaking setting.
 
-See the [0.12.0-rc1 release notes](docs/RELEASE-0.12.0-rc1.md), [previous release notes](docs/RELEASE-0.11.53.md), [architecture](docs/ARCHITECTURE.md) and [notices](THIRD_PARTY_NOTICES.md) for behavior, supported modes and limitations.
+See the [0.12 release notes](docs/RELEASE-0.12.md), [previous release notes](docs/RELEASE-0.11.53.md), [architecture](docs/ARCHITECTURE.md) and [notices](THIRD_PARTY_NOTICES.md) for behavior, supported modes and limitations.
 
 ## Wind display and weather test
 
 These public commands use the same `/pmaero` prefix with PMWeather Aeronautics alone or with PMWeather-IV installed. The compact wind HUD uses the vehicle's heading while riding and remains visible with chat and ordinary screens open. F1 hides it with the rest of the HUD.
+
+With PMIV installed, entering an IV aircraft pilot seat automatically enables the shared live wind HUD. This is enabled by default and includes helicopter pilot seats. Disable `display.autoLiveWindInPilotSeat` in `config/pmweather_iv-client.toml` to use manual commands only. `/pmaero live off` keeps the display off until the next pilot-seat entry. Leaving the seat does not hide it.
 
 | Command | Action |
 | --- | --- |

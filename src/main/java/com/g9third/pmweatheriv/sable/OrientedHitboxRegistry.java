@@ -608,7 +608,17 @@ public final class OrientedHitboxRegistry {
      * the old globalCenter.y + heightRadius AABB top.
      */
     public static Double verticalTopAt(BoundingBox box, double worldX, double worldZ) {
+        SupportSurface surface = verticalSurfaceAt(box, worldX, worldZ, false);
+        return surface == null ? null : surface.y();
+    }
+
+    public record SupportSurface(double x, double y, double z, Vector3d normal) {}
+
+    /** Surface position and outward normal, optionally at the preceding owner pose. */
+    public static SupportSurface verticalSurfaceAt(BoundingBox box, double worldX, double worldZ,
+                                                   boolean previousPose) {
         OrientedBox oriented = BOXES.get(box);
+        if (previousPose && oriented != null) oriented = atOwnerPose(oriented, 0.0);
         if (oriented == null || !Double.isFinite(worldX) || !Double.isFinite(worldZ)) {
             return null;
         }
@@ -626,7 +636,23 @@ public final class OrientedHitboxRegistry {
         if (interval == null || !Double.isFinite(interval.exit())) {
             return null;
         }
-        return oriented.center.y + interval.exit();
+        Vector3d point = new Vector3d(origin).fma(interval.exit(), direction);
+        Vector3d normal = null;
+        double bestError = Double.POSITIVE_INFINITY;
+        for (int axis = 0; axis < 3; ++axis) {
+            if (Math.abs(direction.get(axis)) <= EPSILON) continue;
+            double error = Math.abs(Math.abs(point.get(axis)) - oriented.halfExtents.get(axis));
+            Vector3d candidate = new Vector3d();
+            candidate.setComponent(axis, Math.signum(point.get(axis)));
+            oriented.orientation.transform(candidate);
+            if (error < bestError - EPSILON || Math.abs(error - bestError) <= EPSILON
+                && (normal == null || candidate.y > normal.y)) {
+                normal = candidate;
+                bestError = error;
+            }
+        }
+        return normal == null ? null
+            : new SupportSurface(worldX, oriented.center.y + interval.exit(), worldZ, normal);
     }
 
     public record WorldAabb(

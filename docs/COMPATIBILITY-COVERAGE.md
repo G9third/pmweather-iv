@@ -2,6 +2,13 @@
 
 ## Current candidate
 
+The 2026-10-11 suspension removal candidate uses the content pack's current animated
+wheel stations without added spring travel, wheel offsets or suspension packets.
+The ordinary tire deformation model remains. Clean and dev JAR compilation succeeded;
+this change has not been tested in game or through the helper suites.
+
+## Earlier review evidence
+
 The 2026-10-09 audit-fix candidate requires matching PMAero 1.0 wind revision 3.
 It uses vector-only wind sampling and shares exact same-tick native queries.
 Contact normals propagate through the common road/plane/helicopter tire solver.
@@ -12,10 +19,19 @@ Wheel impact effective mass, terrain response and gravity compensation use that 
 Body friction stops after convergence; tire setup evaluates symmetric matrix pairs once.
 Private traces include separate terrain-probe and gear-constraint timing stages.
 
-Java 21 offline compilation and public/dev packaging were performed. No new regression
-suite, game session or content-pack test was run for this candidate.
-Counts below are historical evidence and do not validate the new contact or wind behavior.
-Public and private builds share identical gameplay classes.
+The 2026-10-10 direct integration review reran Java 21 offline `check checkDev jar jarDev`.
+It also built the public source ZIP independently and verified that the default Gradle
+command produces the clean JAR. Public and private builds share identical gameplay classes.
+
+The 2026-10-10 helper results included 54,269 moving-hull assertions, 6,079 authored-pose
+assertions, 481 geometry-cache assertions, 196 wing-moment assertions, 186 road
+compatibility assertions, 80 suspension/contact assertions and 30 network-state assertions.
+Compound terrain-contact, auto-trim, lifecycle, observer, material and geometry fixtures
+also passed, together with private codec/schema/storage checks. These are helper and
+packaging checks, not new game sessions or content-pack flight/driving tests.
+
+The earlier suspension-packet correction is superseded: the synthetic suspension model
+and its network synchronization were removed on 2026-10-11.
 
 ## Public source corpus
 
@@ -46,7 +62,7 @@ Existing standalone fixtures exercise these production helpers. They use synthet
 
 Earlier geometry/contact checks passed 29,275 numerical assertions. An optional real moving-hull OBJ/JSON check passed 67,598 assertions, covering seven moving objects and 108 merged boxes with 13,342 sampled source-triangle points. Sampled coverage does not prove complete volume containment or live collision response.
 
-Earlier authored-pose, moving-hull, wing-moment, road, packet and observer fixtures passed 6,079, 54,248, 196, 186, 22 and 17 assertions respectively. The material and private trace golden comparisons originated in older source layouts. These historical counts were not rerun after this cleanup.
+Earlier authored-pose, moving-hull, wing-moment, road, packet and observer fixtures passed 6,079, 54,248, 196, 186, 22 and 17 assertions respectively. The material and private trace golden comparisons originated in older source layouts. The current review reran the corresponding helper suites; updated counts above supersede these older counts for the current candidate.
 
 Use `-PaccuracyModel=/path/to/model.obj` for the existing coordinate fixture and both `-PmovingHullDefinition=/path/to/definition.json` and `-PmovingHullModel=/path/to/model.obj` for the existing moving-hull fixture. Obtain original assets from their pinned upstream sources.
 

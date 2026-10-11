@@ -18,6 +18,7 @@ public final class AutoTrimRuntime {
         long tick
     ) {
         AutoTrimController controller = state.autoTrim;
+        controller.setMaximumStepPerTick(AutoTrimOffset.maximumStepPerTick(vehicle));
         boolean offsetTrim = AutoTrimOffset.usesAuthoredModifierOffset(vehicle);
         double baseline = offsetTrim && Double.isFinite(state.autoTrimOverlayBaseline)
             ? state.autoTrimOverlayBaseline

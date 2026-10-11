@@ -3,6 +3,8 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.140'
 }
 
+defaultTasks 'assemble'
+
 version = mod_version
 group = mod_group_id
 
@@ -161,7 +163,7 @@ tasks.register('checkTraceSchemaRegression', JavaExec) {
     }
 }
 
-['AutoTrimRegression', 'CrashGeometryCacheRegression', 'RigidTerrainContactRegression', 'MovingModelHullRegression', 'ContactLifecycleRegression', 'AnimationEvidenceRegression', 'NetworkStateRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'RoadVehicleCompatibilityRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].each { regression ->
+['EntitySurfaceContactRegression', 'GearImpactContactRegression', 'SweptContactVolumeRegression', 'AutoTrimRegression', 'CrashGeometryCacheRegression', 'RigidTerrainContactRegression', 'MovingModelHullRegression', 'ContactLifecycleRegression', 'AnimationEvidenceRegression', 'NetworkStateRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'RoadVehicleCompatibilityRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].each { regression ->
     def mainName = ['AutoTrimRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].contains(regression)
         ? "com.g9third.pmweatheriv.physics.${regression}"
         : regression

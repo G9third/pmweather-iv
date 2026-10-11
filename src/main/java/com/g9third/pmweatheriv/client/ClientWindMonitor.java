@@ -1,12 +1,16 @@
 package com.g9third.pmweatheriv.client;
 
 import com.g9third.pmweatheriv.PMWeatherIV;
+import com.g9third.pmweatheriv.PMIVClientConfig;
 import com.g9third.pmweatheriv.network.WindMonitorNetwork;
 import com.g9third.pmweatheriv.physics.Vec3d;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import java.lang.reflect.Method;
 import java.util.Locale;
+import mcinterface1211.BuilderEntityLinkedSeat;
+import mcinterface1211.WrapperPlayer;
+import mcinterface1211.WrapperWorld;
 import minecrafttransportsimulator.entities.components.AEntityB_Existing;
 import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
 import minecrafttransportsimulator.entities.instances.PartSeat;
@@ -51,6 +55,8 @@ public final class ClientWindMonitor {
     private static WindReading reading = WindReading.UNAVAILABLE;
     private static WindHudState windHudState = WindHudState.WAITING;
     private static boolean liveMonitoring;
+    private static Level pilotSeatLevel;
+    private static java.util.UUID pilotSeatId;
     private static long lastRequestGameTick = Long.MIN_VALUE;
     private static long firstRequestGameTick = Long.MIN_VALUE;
     private static long nextRequestId;
@@ -80,7 +86,6 @@ public final class ClientWindMonitor {
     public static void registerCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("aerowind")
             .then(Commands.literal("live")
-                .executes(context -> reportLiveStatus())
                 .then(Commands.literal("on").executes(context -> setLive(true)))
                 .then(Commands.literal("off").executes(context -> setLive(false))))
             .then(Commands.literal("wind").executes(context -> reportWind()))
@@ -95,16 +100,13 @@ public final class ClientWindMonitor {
 
     private static LiteralArgumentBuilder<CommandSourceStack> windCommandRoot(String root, boolean rootLiveAlias) {
         LiteralArgumentBuilder<CommandSourceStack> commands = Commands.literal(root)
-            .then(Commands.literal("wind")
-                .executes(context -> reportWind())
-                .then(liveCommand()));
+            .then(Commands.literal("wind").executes(context -> reportWind()));
         if (rootLiveAlias) commands.then(liveCommand());
         return commands;
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> liveCommand() {
         return Commands.literal("live")
-            .executes(context -> reportLiveStatus())
             .then(Commands.literal("on").executes(context -> setLive(true)))
             .then(Commands.literal("off").executes(context -> setLive(false)));
     }
@@ -137,6 +139,8 @@ public final class ClientWindMonitor {
         Level currentLevel = minecraft.level;
         com.g9third.pmweatheriv.network.AircraftStateNetwork.resetClientLevel(currentLevel);
         if (currentLevel == null || minecraft.player == null || minecraft.getConnection() == null) {
+            pilotSeatLevel = null;
+            pilotSeatId = null;
             resetSamplingState();
             return;
         }
@@ -148,6 +152,7 @@ public final class ClientWindMonitor {
         }
         serverWindChannelKnown = true;
         serverWindChannelAvailable = channelAvailable;
+        enableOnPilotSeatEntry(minecraft.player, currentLevel);
         applyLatestServerReading();
         if (currentLevel != null) {
             long tick = currentLevel.getGameTime();
@@ -166,6 +171,35 @@ public final class ClientWindMonitor {
         if (liveMonitoring) requestAuthoritativeWind(false);
     }
 
+    private static void enableOnPilotSeatEntry(Player player, Level level) {
+        PartSeat seat = currentPilotSeat(player);
+        java.util.UUID seatId = seat == null ? null : seat.uniqueUUID;
+        boolean entered = seatId != null && (pilotSeatLevel != level
+            || !java.util.Objects.equals(pilotSeatId, seatId));
+        pilotSeatLevel = level;
+        pilotSeatId = seatId;
+        if (entered && PMIVClientConfig.AUTO_LIVE_WIND_IN_PILOT_SEAT.get() && !liveMonitoring) {
+            // Reuse the normal polling path without clearing an active weather test
+            // or repeatedly overriding a manual HUD-off command in the same seat.
+            liveMonitoring = true;
+            com.g9third.pmweatheriv.devsupport.PMIVObserver.windMonitorLiveChanged(true);
+        }
+    }
+
+    private static PartSeat currentPilotSeat(Player player) {
+        if (!(player.getVehicle() instanceof BuilderEntityLinkedSeat linkedSeat)
+            || linkedSeat.level() != player.level() || !linkedSeat.hasPassenger(player)) return null;
+        WrapperPlayer wrapper = WrapperPlayer.getWrapperFor(player);
+        AEntityB_Existing riding = wrapper.getEntityRiding();
+        if (!(riding instanceof PartSeat seat) || !seat.isValid || seat.placementDefinition == null
+            || !seat.placementDefinition.isController || seat.vehicleOn == null
+            || linkedSeat.entity != seat || seat.world != WrapperWorld.getWrapperFor(player.level())
+            || !seat.vehicleOn.isValid || seat.vehicleOn.definition == null
+            || seat.vehicleOn.definition.motorized == null || !seat.vehicleOn.definition.motorized.isAircraft
+            || seat.rider == null || !seat.rider.equals(wrapper)) return null;
+        return seat;
+    }
+
     private static int reportWind() {
         if (!requestAuthoritativeWind(true)) {
             sendMessage("Server wind data is unavailable.", ChatFormatting.RED);
@@ -173,15 +207,6 @@ public final class ClientWindMonitor {
         }
         pendingReportId = nextRequestId;
         pendingReportTick = Minecraft.getInstance().level.getGameTime();
-        return 1;
-    }
-
-    private static int reportLiveStatus() {
-        sendMessage(
-            "Live wind display is " + (liveMonitoring ? "enabled." : "disabled.")
-                + " Use /pmaero live on|off or /pmiv live on|off.",
-            liveMonitoring ? ChatFormatting.GREEN : ChatFormatting.YELLOW
-        );
         return 1;
     }
 

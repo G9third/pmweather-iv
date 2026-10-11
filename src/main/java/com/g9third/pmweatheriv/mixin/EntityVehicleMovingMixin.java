@@ -7,7 +7,7 @@ import com.g9third.pmweatheriv.sable.OrientedEntityRideSupport;
 import com.g9third.pmweatheriv.devsupport.PMIVObserver;
 import com.g9third.pmweatheriv.physics.GroundVehicleWind;
 import com.g9third.pmweatheriv.network.AircraftStateNetwork;
-import com.g9third.pmweatheriv.network.CumulativePoseAnchor;
+import com.g9third.pmweatheriv.network.VehiclePoseSnapshot;
 import com.g9third.pmweatheriv.physics.Vec3d;
 import com.g9third.pmweatheriv.physics.GroundVehicleWindStateAccess;
 import java.util.Collections;
@@ -121,7 +121,8 @@ public abstract class EntityVehicleMovingMixin {
     @Inject(method = "moveVehicle", at = @At("HEAD"), remap = false)
     private void pmweatherIv$clearLegacyEntityMoveAlongState(CallbackInfo callbackInfo) {
         if ((Object) this instanceof EntityVehicleF_Physics vehicle
-            && SableVehicleManager.hasSableCollisionAuthority(vehicle)) {
+            && (SableVehicleManager.hasSableCollisionAuthority(vehicle)
+                || vehicle.world.isClient() && LandingGearSolver.shouldReplaceIvGroundOperations(vehicle))) {
             lastCollidedEntity = null;
             vehicle.collidedEntities.clear();
         }
@@ -143,7 +144,8 @@ public abstract class EntityVehicleMovingMixin {
         BoundingBox queryBox
     ) {
         if ((Object) this instanceof EntityVehicleF_Physics vehicle
-            && SableVehicleManager.hasSableCollisionAuthority(vehicle)) {
+            && (SableVehicleManager.hasSableCollisionAuthority(vehicle)
+                || vehicle.world.isClient() && LandingGearSolver.shouldReplaceIvGroundOperations(vehicle))) {
             return Collections.emptyList();
         }
         return world.getEntitiesWithin(queryBox);
@@ -152,14 +154,15 @@ public abstract class EntityVehicleMovingMixin {
     @Inject(method = "doPostUpdateLogic", at = @At("TAIL"), remap = false)
     private void pmweatherIv$moveAlongOrientedEntitySurfaces(CallbackInfo callbackInfo) {
         if ((Object) this instanceof EntityVehicleF_Physics vehicle
-            && SableVehicleManager.hasSableCollisionAuthority(vehicle)) {
+            && (SableVehicleManager.hasSableCollisionAuthority(vehicle)
+                || vehicle.world.isClient() && LandingGearSolver.shouldReplaceIvGroundOperations(vehicle))) {
             if (!pmweatherIv$placementClearanceHandled && !vehicle.world.isClient()) {
                 pmweatherIv$placementClearanceHandled = OrientedEntityContact.clearPlacementOverlap(
                     vehicle, ((EntityVehicleMovingAccessor) vehicle).pmweatherIv$getPlacingPlayer()
                 );
             }
-            OrientedEntityContact.resolve(vehicle);
-            OrientedEntityRideSupport.moveAlongEntities(vehicle);
+            var carried = OrientedEntityRideSupport.moveAlongEntities(vehicle);
+            OrientedEntityContact.resolve(vehicle, carried);
         }
     }
 
@@ -185,9 +188,10 @@ public abstract class EntityVehicleMovingMixin {
      * for several metres before IV's filter catches up.
      *
      * <p>For PMIV aircraft we keep IV's existing movement packets, but consume the
-     * remaining cumulative server-delta error completely at the end of the client
-     * movement pass.  A separate absolute origin anchors the same
-     * PacketVehicleServerMovement stream after initial load or reconnect.
+     * latest complete server pose at the end of the client movement pass.
+     * An absolute origin combined with native counters cannot recover movement
+     * packets lost before the client entity exists, so both position and angles
+     * now arrive together without depending on those counters.
      * Rendering interpolates from the pre-reconcile client pose to the corrected
      * authoritative pose, but PMIV deliberately does NOT overwrite IV's per-tick
      * motion with a difference of cumulative server deltas. Those deltas may arrive
@@ -208,36 +212,37 @@ public abstract class EntityVehicleMovingMixin {
         Point3D serverR = access.pmweatherIv$getServerDeltaR();
         Point3D clientM = access.pmweatherIv$getClientDeltaM();
         Point3D clientR = access.pmweatherIv$getClientDeltaR();
-        if (!pmweatherIv$finite(serverM) || !pmweatherIv$finite(serverR)
-            || !pmweatherIv$finite(clientM) || !pmweatherIv$finite(clientR)) {
+        VehiclePoseSnapshot anchor = AircraftStateNetwork.poseAnchor(vehicle);
+        boolean finiteCounters = pmweatherIv$finite(serverM) && pmweatherIv$finite(serverR)
+            && pmweatherIv$finite(clientM) && pmweatherIv$finite(clientR);
+        if (anchor == null && !finiteCounters) {
             pmweatherIv$hasPreReconcilePose = false;
             return;
         }
 
-        double residualX = serverM.x - clientM.x;
-        double residualY = serverM.y - clientM.y;
-        double residualZ = serverM.z - clientM.z;
-        vehicle.position.add(residualX, residualY, residualZ);
-        clientM.set(serverM);
-
-        double residualPitch = serverR.x - clientR.x;
-        double residualYaw = serverR.y - clientR.y;
-        double residualRoll = serverR.z - clientR.z;
-        if (Math.abs(residualPitch) + Math.abs(residualYaw) + Math.abs(residualRoll) > 1.0E-12) {
-            vehicle.orientation.angles.add(residualPitch, residualYaw, residualRoll).clamp180();
-            vehicle.orientation.updateToAngles();
-        }
-        clientR.set(serverR);
-
-        CumulativePoseAnchor anchor = AircraftStateNetwork.poseAnchor(vehicle);
         if (anchor != null) {
-            Vec3d absolutePosition = anchor.position(new Vec3d(serverM.x, serverM.y, serverM.z));
-            Vec3d absoluteAngles = anchor.angles(new Vec3d(serverR.x, serverR.y, serverR.z));
+            Vec3d absolutePosition = anchor.positionWorld();
+            Vec3d absoluteAngles = anchor.anglesDegrees();
             if (absolutePosition.isFinite() && absoluteAngles.isFinite()) {
                 vehicle.position.set(absolutePosition.x(), absolutePosition.y(), absolutePosition.z());
                 vehicle.orientation.angles.set(absoluteAngles.x(), absoluteAngles.y(), absoluteAngles.z()).clamp180();
                 vehicle.orientation.updateToAngles();
             }
+        } else {
+            // Before the first complete pose arrives, retain IV's stream fallback.
+            vehicle.position.add(serverM.x - clientM.x, serverM.y - clientM.y, serverM.z - clientM.z);
+            double residualPitch = serverR.x - clientR.x;
+            double residualYaw = serverR.y - clientR.y;
+            double residualRoll = serverR.z - clientR.z;
+            if (Math.abs(residualPitch) + Math.abs(residualYaw) + Math.abs(residualRoll) > 1.0E-12) {
+                vehicle.orientation.angles.add(residualPitch, residualYaw, residualRoll).clamp180();
+                vehicle.orientation.updateToAngles();
+            }
+        }
+        if (finiteCounters) {
+            // Keep native bookkeeping coherent without using it as the pose authority.
+            clientM.set(serverM);
+            clientR.set(serverR);
         }
 
         if (pmweatherIv$hasPreReconcilePose) {

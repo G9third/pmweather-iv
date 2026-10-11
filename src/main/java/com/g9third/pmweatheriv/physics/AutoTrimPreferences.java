@@ -4,40 +4,36 @@ import minecrafttransportsimulator.baseclasses.ComputedVariable;
 import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
 import minecrafttransportsimulator.mcinterface.IWrapperNBT;
 
-/** Per-aircraft preferences registered through IV's saved computed-variable list. */
+/** Per-aircraft auto-trim opt-in registered through IV's saved computed-variable list. */
 public final class AutoTrimPreferences {
-    public static final String DISABLED_VARIABLE = "pmiv_auto_trim_disabled";
-    public static final String NOTICE_SHOWN_VARIABLE = "pmiv_auto_trim_notice_shown";
+    public static final String ENABLED_VARIABLE = "pmiv_auto_trim_enabled";
 
     private AutoTrimPreferences() {}
 
     /** Called from the IV vehicle constructor after its saved variables have loaded. */
     public static void attach(EntityVehicleF_Physics vehicle, IWrapperNBT savedData) {
         if (vehicle == null) return;
-        attachVariable(vehicle, DISABLED_VARIABLE, savedData);
-        attachVariable(vehicle, NOTICE_SHOWN_VARIABLE, savedData);
+        attachVariable(vehicle, ENABLED_VARIABLE, savedData);
     }
 
-    public static boolean disabled(EntityVehicleF_Physics vehicle) {
-        return value(vehicle, DISABLED_VARIABLE) >= 0.5;
+    /** A missing variable in a new vehicle or an older save is intentionally off. */
+    public static boolean enabled(EntityVehicleF_Physics vehicle) {
+        return enabledValue(value(vehicle, ENABLED_VARIABLE));
     }
 
-    public static void setDisabled(EntityVehicleF_Physics vehicle, boolean disabled) {
-        setValue(vehicle, DISABLED_VARIABLE, disabled ? 1.0 : 0.0);
+    /** Missing, malformed, and default-zero saved values all remain off. */
+    public static boolean enabledValue(double savedValue) {
+        return Double.isFinite(savedValue) && savedValue >= 0.5;
     }
 
-    public static boolean noticeShown(EntityVehicleF_Physics vehicle) {
-        return value(vehicle, NOTICE_SHOWN_VARIABLE) >= 0.5;
+    public static void setEnabled(EntityVehicleF_Physics vehicle, boolean enabled) {
+        setValue(vehicle, ENABLED_VARIABLE, enabled ? 1.0 : 0.0);
     }
 
-    /** Auto-start is allowed only for the default-on, pilot-owned fixed-wing path. */
-    public static boolean shouldAutoStart(boolean globallyEnabled, boolean supportedFixedWing,
-                                          boolean optedOut, boolean hasControllerPilot) {
-        return globallyEnabled && supportedFixedWing && !optedOut && hasControllerPilot;
-    }
-
-    public static void setNoticeShown(EntityVehicleF_Physics vehicle) {
-        setValue(vehicle, NOTICE_SHOWN_VARIABLE, 1.0);
+    /** Auto-start requires an explicit per-aircraft opt-in and its current pilot. */
+    public static boolean shouldAutoStart(boolean optedIn, boolean supportedFixedWing,
+                                          boolean hasControllerPilot) {
+        return optedIn && supportedFixedWing && hasControllerPilot;
     }
 
     private static void attachVariable(EntityVehicleF_Physics vehicle, String key, IWrapperNBT savedData) {

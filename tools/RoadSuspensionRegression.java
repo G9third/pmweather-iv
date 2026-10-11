@@ -9,13 +9,11 @@ import minecrafttransportsimulator.entities.instances.APart;
 import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
 import minecrafttransportsimulator.entities.instances.PartGeneric;
 import minecrafttransportsimulator.entities.instances.PartGroundDevice;
-import minecrafttransportsimulator.jsondefs.JSONAnimationDefinition;
-import minecrafttransportsimulator.jsondefs.JSONAnimationDefinition.AnimationComponentType;
 import minecrafttransportsimulator.jsondefs.JSONPart;
 import minecrafttransportsimulator.jsondefs.JSONPartDefinition;
 import minecrafttransportsimulator.jsondefs.JSONVehicle;
 
-/** Focused road-wheel support, friction, and native-animation regressions. */
+/** Focused road-wheel support, friction, and native station geometry regressions. */
 public final class RoadSuspensionRegression {
     private static final double GRAVITY = 9.80665;
     private static int assertions;
@@ -28,11 +26,9 @@ public final class RoadSuspensionRegression {
         windExceedsGripBeforeLift();
         torqueTransfersLoadAndUnloadsWheels();
         rollMomentMustExceedSupportCapacityToTip();
-        fallbackSuspensionHasBoundedTravelAndCompression();
         unloadedWheelHasNoGrip();
         serviceAndParkingBrakeCommandsRemainManual();
         grassRollingCoefficientRemainsAuthored();
-        nativeAnimationEvidenceIsDeclaredAndFrameAware();
         nestedStationUsesVehicleFrameOnce();
         System.out.println("RoadSuspensionRegression: " + assertions
             + " assertions passed (solver and native-pose fixtures; no game simulation)");
@@ -138,28 +134,6 @@ public final class RoadSuspensionRegression {
             "one-sided support loss leaves the physical tip rate");
     }
 
-    private static void fallbackSuspensionHasBoundedTravelAndCompression() {
-        near(0.072, RoadSuspensionModel.wheelSagMetersForRadius(0.4), 1.0e-12,
-            "generic wheel sag scales with radius at the reduced fallback fraction");
-        near(0.11, RoadSuspensionModel.wheelSagMetersForRadius(1.0), 1.0e-12,
-            "large wheel sag remains capped at the reduced generic maximum");
-        near(0.035, RoadSuspensionModel.wheelSagMetersForRadius(0.05), 1.0e-12,
-            "small wheel sag has a finite generic minimum");
-        near(0.136, RoadSuspensionModel.maximumSeriesCompressionMeters(0.02, 0.06, 0.8), 1.0e-12,
-            "road bump envelope counts two tire and projected suspension deflections");
-
-        double mass = 525.0;
-        double sag = 0.072;
-        near(-sag, RoadSuspensionModel.nextTravelMeters(-sag, 0.0, mass, sag, 0.05), 1.0e-12,
-            "unloaded wheel can settle to full natural extension");
-        near(sag, RoadSuspensionModel.nextTravelMeters(0.0, 1.0e9, mass, sag, 0.05), 1.0e-12,
-            "fallback compression is bounded at one sag beyond static ride height");
-        near(0.035, TireNormalCompliance.maximumRoadSolidPenetration(0.02, 0.005), 1.0e-12,
-            "road wheel pose recovery uses the two-deflection tire bump envelope");
-        near(0.055, TireNormalCompliance.maximumSolidPenetration(0.02, 0.005), 1.0e-12,
-            "non-road native tire compliance retains its existing bump envelope");
-    }
-
     private static void unloadedWheelHasNoGrip() {
         List<GroundContactImpulseSolver.Contact> oneWheel = List.of(wheel(0.0, 0.0, 0.58, 0.78));
         GroundContactImpulseSolver.Result result = solve(1000.0,
@@ -191,57 +165,6 @@ public final class RoadSuspensionRegression {
         near(0.78, grass.lateral(), 0.0, "grass lateral grip remains the evaluated pack value");
     }
 
-    private static void nativeAnimationEvidenceIsDeclaredAndFrameAware() throws Exception {
-        EntityVehicleF_Physics vehicle = vehicle();
-        PartGroundDevice device = device(vehicle, new Vec3d(1.0, 0.0, 0.0));
-
-        device.placementDefinition.animations = List.of(
-            animation(AnimationComponentType.TRANSLATION, new Point3D(0.0, 1.0, 0.0), new Point3D()));
-        require(RoadSuspensionModel.hasDeclaredVerticalStationMotion(device),
-            "authored placement suspension translation owns vertical wheel travel");
-
-        device.placementDefinition.animations = List.of(
-            animation(AnimationComponentType.ROTATION, new Point3D(0.0, 1.0, 0.0), new Point3D(1.0, 0.0, 0.0)));
-        require(!RoadSuspensionModel.hasDeclaredVerticalStationMotion(device),
-            "planar steering around the wheel station remains fallback eligible");
-
-        JSONPart owner = partDefinition();
-        setField(device, "definition", owner);
-        device.placementDefinition.animations = null;
-        owner.generic.movementAnimations = List.of(
-            animation(AnimationComponentType.TRANSLATION, new Point3D(1.0, 0.0, 0.0), new Point3D()));
-        require(!RoadSuspensionModel.hasDeclaredVerticalStationMotion(device),
-            "generic planar motion is not mistaken for vertical suspension");
-        owner.generic.movementAnimations = List.of(
-            animation(AnimationComponentType.TRANSLATION, new Point3D(0.0, 1.0, 0.0), new Point3D()));
-        require(RoadSuspensionModel.hasDeclaredVerticalStationMotion(device),
-            "generic vertical movement owns suspension travel");
-
-        owner.generic.movementAnimations = List.of(
-            animation(AnimationComponentType.ROTATION, new Point3D(1.0, 0.0, 0.0), new Point3D()));
-        require(!RoadSuspensionModel.hasDeclaredVerticalStationMotion(device),
-            "wheel spin around its own station is not vertical travel");
-
-        owner.generic.movementAnimations = null;
-        APart parent = genericPart(vehicle, new Vec3d(0.0, 0.0, 0.0));
-        parent.placementDefinition.animations = List.of(
-            animation(AnimationComponentType.TRANSLATION, new Point3D(0.0, 1.0, 0.0), new Point3D()));
-        setField(device, "partOn", parent);
-        require(RoadSuspensionModel.hasDeclaredVerticalStationMotion(device),
-            "nested wheel inherits authored vertical motion from its parent");
-
-        parent.placementDefinition.animations = null;
-        setField(device, "partOn", null);
-        setField(device, "definition", owner);
-        require(!RoadSuspensionModel.hasDeclaredVerticalStationMotion(device),
-            "stationary authored pose is eligible for fallback at rest");
-        for (double y : new double[] {0.0, 0.00002, 0.00009, 0.05, -0.03}) {
-            device.position.y = y;
-            require(!RoadSuspensionModel.hasDeclaredVerticalStationMotion(device),
-                "repeated fresh poses and fallback offsets do not latch authored motion");
-        }
-    }
-
     private static void nestedStationUsesVehicleFrameOnce() throws Exception {
         EntityVehicleF_Physics vehicle = vehicle();
         setField(vehicle, "position", new Point3D(120.0, 42.0, -80.0));
@@ -250,7 +173,7 @@ public final class RoadSuspensionRegression {
         Vec3d world = vehiclePosition(vehicle).add(FlightMath.toWorld(vehicle.orientation, station));
         PartGroundDevice device = device(vehicle, world);
         setField(device, "partOn", genericPart(vehicle, Vec3d.ZERO));
-        Vec3d resolved = RoadSuspensionModel.nativeCenterLocal(device);
+        Vec3d resolved = LandingGearSolver.groundDeviceCenterLocal(device);
         nearVec(station, resolved, 1.0e-9,
             "nested native world station resolves to root model coordinates exactly once");
     }
@@ -335,15 +258,6 @@ public final class RoadSuspensionRegression {
         JSONPart part = new JSONPart();
         part.generic = new JSONPart.JSONPartGeneric();
         return part;
-    }
-
-    private static JSONAnimationDefinition animation(AnimationComponentType type, Point3D axis,
-                                                       Point3D center) {
-        JSONAnimationDefinition animation = new JSONAnimationDefinition();
-        animation.animationType = type;
-        animation.axis = axis;
-        animation.centerPoint = center;
-        return animation;
     }
 
     private static Vec3d vehiclePosition(EntityVehicleF_Physics vehicle) {

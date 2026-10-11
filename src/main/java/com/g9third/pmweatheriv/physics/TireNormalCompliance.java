@@ -49,42 +49,13 @@ public final class TireNormalCompliance {
         return Vec3d.clamp(Math.max(0, device.getHeight()) * 0.04, 0.008, 0.040);
     }
 
-    /** Series tire/suspension response; still uses the shared unilateral normal impulse. */
-    public static Response evaluateRoadSuspension(RoadSuspensionModel.Parameters parameters,
-            double complianceGap, double rigidTarget, double skin, double dt,
-            boolean trueImpactResidual) {
-        if (parameters == null || !parameters.finite() || !(dt > 0.0)
-            || !Double.isFinite(complianceGap) || !Double.isFinite(skin)) return rigid(rigidTarget);
-        // A material impact's explicit negative residual remains the exact hard
-        // contact target and cannot be absorbed by the fallback suspension.
-        if (trueImpactResidual) return rigid(rigidTarget);
-        double stiffness = parameters.stiffnessNpm();
-        double damping = parameters.dampingNsPm();
-        double denominator = damping + dt * stiffness;
-        if (!(denominator > 0.0) || !Double.isFinite(denominator)) return rigid(rigidTarget);
-        double maximumCompression = parameters.maxTotalCompressionMeters();
-        double compression = Math.min(skin - complianceGap, maximumCompression);
-        double hardPenetration = Math.max(0.0, maximumCompression - skin);
-        double hardTarget = -Math.max(0.0, complianceGap + hardPenetration) / dt;
-        double springTarget = stiffness * compression / denominator;
-        return new Response(springTarget, 1.0 / (dt * denominator), stiffness, damping,
-            parameters.totalDeflectionMeters(), hardTarget);
-    }
     /** Deep penetration is a pose error, not an additional source of tire grip. */
     public static double maximumSolidPenetration(double nominalDeflection, double skin) {
         return Math.max(0.005, 3.0 * Math.max(0.0, nominalDeflection) - Math.max(0.0, skin));
     }
-    /** Road fallback tires share a two-deflection bump envelope with their series suspension. */
-    public static double maximumRoadSolidPenetration(double nominalDeflection, double skin) {
-        return Math.max(0.005, 2.0 * Math.max(0.0, nominalDeflection) - Math.max(0.0, skin));
-    }
     public static double upwardPoseCorrection(double gap, double nominalDeflection, double skin) {
         if (!Double.isFinite(gap) || !Double.isFinite(nominalDeflection) || !Double.isFinite(skin)) return 0.0;
         return Math.max(0.0, -gap - maximumSolidPenetration(nominalDeflection, skin));
-    }
-    public static double upwardRoadPoseCorrection(double gap, double nominalDeflection, double skin) {
-        if (!Double.isFinite(gap) || !Double.isFinite(nominalDeflection) || !Double.isFinite(skin)) return 0.0;
-        return Math.max(0.0, -gap - maximumRoadSolidPenetration(nominalDeflection, skin));
     }
 
     /** The installed count stays fixed during unloading; a lifted wheel cannot stiffen the others. */

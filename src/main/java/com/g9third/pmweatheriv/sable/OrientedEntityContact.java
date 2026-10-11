@@ -3,6 +3,7 @@ package com.g9third.pmweatheriv.sable;
 import com.g9third.pmweatheriv.devsupport.PMIVObserver;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import minecrafttransportsimulator.baseclasses.BoundingBox;
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
@@ -11,6 +12,7 @@ import minecrafttransportsimulator.mcinterface.IWrapperEntity;
 import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
+import net.minecraft.world.entity.player.Player;
 
 /**
  * Vanilla-entity contact bridge for Sable-owned IV aircraft.
@@ -32,6 +34,10 @@ public final class OrientedEntityContact {
     }
 
     public static void resolve(EntityVehicleF_Physics vehicle) {
+        resolve(vehicle, Set.of());
+    }
+
+    public static void resolve(EntityVehicleF_Physics vehicle, Set<IWrapperEntity> carried) {
         if (vehicle == null || vehicle.world == null || vehicle.encompassingBox == null) {
             return;
         }
@@ -51,7 +57,8 @@ public final class OrientedEntityContact {
             // If the aircraft crossed this entity between ticks but no current
             // OBB overlaps, transfer only the remaining surface-normal motion.
             // Current overlap resolution below then handles any residual.
-            OrientedHitboxRegistry.EntityContact sweep = earliestSweptContact(vehicle, bounds);
+            OrientedHitboxRegistry.EntityContact sweep = carried.contains(entity) ? null
+                : earliestSweptContact(vehicle, bounds);
             if (sweep != null && sweep.time() < 1.0 - 1.0E-9
                 && !hasCurrentContact(vehicle, bounds)) {
                 Vector3d normal = sweep.normal();
@@ -98,7 +105,8 @@ public final class OrientedEntityContact {
                 }
                 translate(entity, safe.delta(), safe.normal().y > 0.5);
 
-                Vector3d surfaceMotion = fullVehiclePointMotion(vehicle, center(bounds));
+                Vector3d surfaceMotion = carried.contains(entity) ? new Vector3d()
+                    : fullVehiclePointMotion(vehicle, center(bounds));
                 removeInwardNormalVelocity(entity, safe.normal(), surfaceMotion);
 
                 bounds = entity.getBounds();
@@ -110,6 +118,11 @@ public final class OrientedEntityContact {
     }
 
     private static boolean eligible(IWrapperEntity entity) {
+        if (entity instanceof NativeEntityContactAccess access) {
+            var nativeEntity = access.pmweatherIv$contactEntity();
+            if (nativeEntity.level().isClientSide
+                && (!(nativeEntity instanceof Player p) || !p.isLocalPlayer())) return false;
+        }
         return entity != null
             && entity.isValid()
             && entity.getEntityRiding() == null
@@ -393,6 +406,15 @@ public final class OrientedEntityContact {
             return;
         }
         Point3D position = entity.getPosition();
+        if (entity instanceof NativeEntityContactAccess access) {
+            var nativeEntity = access.pmweatherIv$contactEntity();
+            nativeEntity.setPos(position.x + delta.x, position.y + delta.y, position.z + delta.z);
+            if (onGround) {
+                nativeEntity.setOnGround(true);
+                nativeEntity.fallDistance = 0;
+            }
+            return;
+        }
         entity.setPosition(
             new Point3D(position.x + delta.x, position.y + delta.y, position.z + delta.z),
             onGround

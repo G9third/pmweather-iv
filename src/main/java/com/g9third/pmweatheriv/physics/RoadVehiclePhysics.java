@@ -202,6 +202,28 @@ public final class RoadVehiclePhysics {
             }
         }
         if (!force.isFinite() || !torque.isFinite()) throw new IllegalStateException("Non-finite Sable road load");
+        // Compare identical geometry and motion without weather. This isolates
+        // weather disturbance from ordinary drag without another wind query.
+        Vec3d calmRoofForce = Vec3d.ZERO;
+        for (int i=0; i<patches.size(); ++i) {
+            var patch = patches.get(i);
+            var panel = state.roadBody.roofPanels().get(i);
+            Vec3d flow = toLocal(orientation, velocity).add(omega.cross(
+                patch.pointLocal().subtract(state.plan.centerOfMassLocal())));
+            int b = i*inputStride;
+            state.pmaeroBodyInputBuffer[b+8] = flow.x();
+            state.pmaeroBodyInputBuffer[b+9] = flow.y();
+            state.pmaeroBodyInputBuffer[b+10] = flow.z();
+            calmRoofForce = calmRoofForce.add(RoadRoofPressure.force(panel,
+                flow.add(omega.cross(panel.pointLocal().subtract(patch.pointLocal()))),
+                density, config.roadRoofSuctionPressureCoefficient()));
+        }
+        PMAeroBridge.evaluateExternalBodyInto(state.pmaeroBodyInputBuffer, state.pmaeroBodyOutputBuffer,
+            density, cd/attenuation, config.groundCrossflowDragCoefficient(), body.width(), body.height(),
+            body.length(), body.wettedArea(), state.plan.centerOfMassLocal());
+        Vec3d calmForce = new Vec3d(out[0], out[1], out[2]).add(calmRoofForce);
+        state.roadWeatherForceWorld = toWorld(orientation, force.subtract(calmForce));
+        if (!state.roadWeatherForceWorld.isFinite()) throw new IllegalStateException("Non-finite road weather disturbance");
         return new SubstepAerodynamicLoads(toWorld(orientation,force),torque,torque,0,0,
             field.initializeCenter(),captureSurfaceSamples ? List.copyOf(surfaces) : List.of());
     }

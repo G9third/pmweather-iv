@@ -1,7 +1,7 @@
 {
-  "version": "0.12.0-rc1",
+  "version": "0.12",
   "algorithm": "SHA-256",
-  "generatedUtc": "2026-10-10T13:57:33.839091+00:00",
+  "generatedUtc": "2026-10-11T08:58:57.310713+00:00",
   "privateDeveloperSourcesBundled": false,
   "dependencyBinariesBundled": false,
   "contentPackAssetsBundled": false,
@@ -33,13 +33,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 6287,
-      "sha256": "f75905ce7059818741a4ece1c19a9142108454a3a8fe07d56a0628985da4dc8b"
+      "bytes": 8281,
+      "sha256": "fd997fde6a3ddbadbf31a3c1734a8560fe5ce7f85286ef766d218b9655fafe77"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
-      "bytes": 4744,
-      "sha256": "b2d6c82793ff02b99fd0e6ed562443ef273c2e6336ee6ab96b06f7114aee1906"
+      "bytes": 6902,
+      "sha256": "185371bcd1b633c22ef3f8c7d8c9d7114c2c190432cbd24ccadd31ea6ae99d39"
     },
     {
       "path": "build.bat",
@@ -48,8 +48,8 @@
     },
     {
       "path": "build.gradle",
-      "bytes": 16586,
-      "sha256": "d6c2eae069d7c18a8b63c85eda7dabd65a7b7bd8b667a871ec5d06245a79275b"
+      "bytes": 16708,
+      "sha256": "da2020d19ecefa25ad183a9a98e93c0ebccdfd1169d407a8b6c830ad82a9ef1d"
     },
     {
       "path": "docs/ARCHITECTURE.md",
@@ -63,8 +63,8 @@
     },
     {
       "path": "docs/COMPATIBILITY-COVERAGE.md",
-      "bytes": 5481,
-      "sha256": "41056c0c7166e1c476e00103dee29a007436b7b9f2c364076642cc49346c6394"
+      "bytes": 6535,
+      "sha256": "761aad2697f7052325352428503b9939c73ed23025baf80782040b1542b833a0"
     },
     {
       "path": "docs/CONTENT-PACK-AIR-WARNING-SOUNDS.md",
@@ -83,8 +83,18 @@
     },
     {
       "path": "docs/RELEASE-0.12.0-rc1.md",
-      "bytes": 2812,
-      "sha256": "1bfdb9a0d90e68789ec520fadb95f1225b7c22bfd99b39fe9760225b5e6407e3"
+      "bytes": 5613,
+      "sha256": "677ab1a4c8e95538d0fccb084e107309f974d58afff789b294b1cc31e5699719"
+    },
+    {
+      "path": "docs/RELEASE-0.12.md",
+      "bytes": 806,
+      "sha256": "ca25949fcd7ed8ab17bd5874f06bd3bacf297316a6e738d3eaea09abf540a385"
+    },
+    {
+      "path": "gradle/wrapper/LICENSE",
+      "bytes": 10174,
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
     },
     {
       "path": "gradle/wrapper/gradle-wrapper.jar",
@@ -98,8 +108,8 @@
     },
     {
       "path": "gradle.properties",
-      "bytes": 219,
-      "sha256": "ad6420c02d6737b79f51b72c50f2c25d59f32ea32288cbc801bdc5bb6c9ecbbb"
+      "bytes": 213,
+      "sha256": "2a39b88133da67e3273c0cfba964c52d2452ea5025b823d30fe5f007c280f517"
     },
     {
       "path": "gradlew",
@@ -127,19 +137,24 @@
       "sha256": "131b93c9bd91f22883f53845f0fbdc4d926f573ff44c12b0cc91740e7b614d2e"
     },
     {
+      "path": "src/main/java/com/g9third/pmweatheriv/PMIVClientConfig.java",
+      "bytes": 1000,
+      "sha256": "babeb1015cdba61bc1d80ef27fcfe697b25cc681da72cfa968bc67f6bfb20662"
+    },
+    {
       "path": "src/main/java/com/g9third/pmweatheriv/PMWeatherIV.java",
-      "bytes": 3178,
-      "sha256": "72b63527bf5e38672a1979a2aec1b01b5c5f7a8204990d8936a2ed861d5d8d71"
+      "bytes": 2958,
+      "sha256": "2c60d3a0cd6209ac99f74f978af236c8a4a0739b353dae34b191031146d07221"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/PMWeatherIVClient.java",
-      "bytes": 1215,
-      "sha256": "717eb00092abec6d74dff4f11eefe98b1f965b8ac0817feb14568e6a7d42506b"
+      "bytes": 1286,
+      "sha256": "dd177bdd7a9945a2b073ea398ceffc975933d62558007fe8dbe5c46608490785"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/PMWeatherIVConfig.java",
-      "bytes": 5814,
-      "sha256": "6748ca0ba5e985afb2ba7aa8bbf0e9353b429d27ad2790a7b5233c6ddb56eb90"
+      "bytes": 5028,
+      "sha256": "b8953edfcd8b937ff9721958c1234d873f70cf5c387bdff54bef24ada4b239d9"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/api/PMIVSoundVariableApi.java",
@@ -148,13 +163,13 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/client/AutoTrimClient.java",
-      "bytes": 7848,
-      "sha256": "d9b5f1b07cbaa9ddf2aa02e65262f4fc1b8ba4fd7c5944c48332939f5fe54200"
+      "bytes": 11534,
+      "sha256": "72d0ec4515057da80a660878398b5a3bdf3d16b51a41de5c3a9dd9361a0a903f"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/client/ClientWindMonitor.java",
-      "bytes": 30567,
-      "sha256": "7fa2b36e75b4da90d1bb2e2321ec9949f62d0072f08e8e8679ad3f3126a009bc"
+      "bytes": 32219,
+      "sha256": "fa036b94ec6e85de397908f47777eb64b07370d7cdde8c2c891208432eb12eef"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/compat/PMAeroBridge.java",
@@ -168,8 +183,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/devsupport/PMIVObserver.java",
-      "bytes": 14211,
-      "sha256": "40194867bf504b9017dabaecdcc58bc42e50eb238470f8355862e00c2393f447"
+      "bytes": 15389,
+      "sha256": "7f0e236cef765c22075ff5a8b91f7404aca6e8e62699c44568b0037668f474d3"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/BoundingBoxMixin.java",
@@ -203,8 +218,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/EntityParticleWindMixin.java",
-      "bytes": 3003,
-      "sha256": "2d0549f50d41f53525ef72fdbb12f30cbda2f58e33b899184517d6f8838876c3"
+      "bytes": 8489,
+      "sha256": "886da6c92bf9912d3ef3d111732f08473625a722a4bef09592da198233fe8c05"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/EntityVehicleMovingAccessor.java",
@@ -213,8 +228,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/EntityVehicleMovingMixin.java",
-      "bytes": 16956,
-      "sha256": "8e904c7bb34c01b106cbd586b9add3b9023241ed81003b55beb4176ed58ffe19"
+      "bytes": 17521,
+      "sha256": "5c461fd286c3188475728f31aa0cddcb89ce7957024cffcb4c7f37dcc334a636"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/EntityVehiclePhysicsAccessor.java",
@@ -243,13 +258,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/PartGroundDeviceContactMixin.java",
-      "bytes": 6946,
-      "sha256": "e83b38869dcdc6e6cc615d81ffbb5e7944e13dd55ff349049573c40651536257"
-    },
-    {
-      "path": "src/main/java/com/g9third/pmweatheriv/mixin/PartGroundDeviceFakeAccessor.java",
-      "bytes": 554,
-      "sha256": "8f14287325d049b7d4eb7e8756f8d97f9ba9f0127c6df27ac2a7f951f0124320"
+      "bytes": 2773,
+      "sha256": "f8f0882f64a2df22999113f1e714dc3675f5684cd928d4e3e5d33a7ce401c653"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/Rapier3DInvoker.java",
@@ -260,6 +270,11 @@
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/RapierPhysicsPipelineMixin.java",
       "bytes": 2882,
       "sha256": "8a41fe2c6ff687bf7e66acc8295c4be80f046a8bc3e488983d4b62a09d316e27"
+    },
+    {
+      "path": "src/main/java/com/g9third/pmweatheriv/mixin/ShapesEntityContactMixin.java",
+      "bytes": 1076,
+      "sha256": "5e4afb803f40a19656dc4f60d9f11de156006ff47515c2753ffc230f4b550015"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/VehicleGroundDeviceBoxAccessor.java",
@@ -282,9 +297,14 @@
       "sha256": "3cb3b1f05dfce5126902d2446139c0424f1779f5e5586749a9898cb40bf0642f"
     },
     {
+      "path": "src/main/java/com/g9third/pmweatheriv/mixin/WrapperEntityBoundsMixin.java",
+      "bytes": 2008,
+      "sha256": "92097857367bc619c36a270f943584e90a53bb19ac9d357e262678e3e1bb4f87"
+    },
+    {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/WrapperEntityRiderMixin.java",
-      "bytes": 3114,
-      "sha256": "cc629a5d0419c9b6b8893454f0553bb0e42bd4c67b53599578b76c1cb1247f15"
+      "bytes": 3290,
+      "sha256": "6bf73ca32a30d73c4f03397e3f8f7fd7d765f9ed8e0527290d3c55c9fd7143e4"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/WrapperWorldAccessor.java",
@@ -293,8 +313,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/WrapperWorldMixin.java",
-      "bytes": 2863,
-      "sha256": "916c9e88558f4b5a71c715ac2f9190bae68b4113ed78011f99d6df05400fda93"
+      "bytes": 3466,
+      "sha256": "b7883d3702ce6fee963894462f1bf7346812f0bb9d329d283d3de1f7249a2753"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/model/ModelPhysicalVisibility.java",
@@ -308,18 +328,13 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/network/AircraftStateNetwork.java",
-      "bytes": 13001,
-      "sha256": "326b0ccac829682a735145e7476b8a0bd85e92732a4e605e0b1b0d00269e5135"
+      "bytes": 12577,
+      "sha256": "f670114af3dcce219cfcb8a4412c59416ea2dfb55bdcd360d9a3de3daff86d67"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/network/AutoTrimNetwork.java",
-      "bytes": 17022,
-      "sha256": "7d082f31f13859456d270f8cc8c3bc52f9297ddca7769b0910f29f30f1a4a9eb"
-    },
-    {
-      "path": "src/main/java/com/g9third/pmweatheriv/network/CumulativePoseAnchor.java",
-      "bytes": 880,
-      "sha256": "60d268ce4f17fbfee5847235cbd7041a3a7d382cac7af1b87907d193f832db6b"
+      "bytes": 13805,
+      "sha256": "ef58f0a0b046b3ad7d6f34311a7aefb9b6952237361014603e1f1db5cf0b609c"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/network/LinkedSeatMountAccess.java",
@@ -332,9 +347,9 @@
       "sha256": "6558ab3a1ac73b9433f7d4ae1ad62ed84cf076706d8071d38bdee456cf149e3a"
     },
     {
-      "path": "src/main/java/com/g9third/pmweatheriv/network/RoadSuspensionNetwork.java",
-      "bytes": 9548,
-      "sha256": "bc860e21c3d6d1df38cbd514b8b5b1dab48e4ec028f9fd827f41bc5e98696d2c"
+      "path": "src/main/java/com/g9third/pmweatheriv/network/VehiclePoseSnapshot.java",
+      "bytes": 422,
+      "sha256": "897e782b2bd54632b916ec5ba61156d8905572a357dced197207f55a4593bd53"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/network/WindMonitorNetwork.java",
@@ -363,8 +378,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/AircraftState.java",
-      "bytes": 6940,
-      "sha256": "a60f4e13dfcbfd2b53fde0a64566ba043cb3ceeb26b8c466ff5deade24d51b99"
+      "bytes": 7071,
+      "sha256": "93624959883120077ee56bb3b2b33cb66cce97ec2b7a9ea2bc6f234196fd724e"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/AircraftStateAccess.java",
@@ -393,8 +408,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/AirframePreparation.java",
-      "bytes": 20806,
-      "sha256": "e45aa21351eabb002d21a81de23737dbbacf2f272e7175df213396a6fff5b719"
+      "bytes": 20898,
+      "sha256": "05d6a9285520f8c2cff955163716f8aca885fc22743e1ebd3637785b0907cacb"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/AnimatedWingGeometry.java",
@@ -413,23 +428,23 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/AutoTrimController.java",
-      "bytes": 28771,
-      "sha256": "45a64de3510ce64c7a7bcb680c8eaf2485b348cced18feff7e961af99e3f6dae"
+      "bytes": 30919,
+      "sha256": "97970193d1dfbb5ee60ad064cef12ba419a7d10703db56073cca6eb4535fb2f8"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/AutoTrimOffset.java",
-      "bytes": 12077,
-      "sha256": "dd0247cac9e4920b8815c6dd37ef8f7980f3544412f878abfa7e862d6c3b5c57"
+      "bytes": 14237,
+      "sha256": "4c59d495048fa9282045c00cf22de8b44bbf7a5d95878b711477f6e3a76d1f39"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/AutoTrimPreferences.java",
-      "bytes": 3187,
-      "sha256": "c930cd947a2ffb505950e9fd937e5b3fd249a9e2a499e0aaf7dfebd6a079a33c"
+      "bytes": 3010,
+      "sha256": "7f611629916bbc29059e7596f8dbc54964131d0c18b99e70aaaf1ca836949c98"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/AutoTrimRuntime.java",
-      "bytes": 12246,
-      "sha256": "dda31136f93f8f1c6d482123cdbd78a015fdfaeec24525a98e0b5ab2084de3a3"
+      "bytes": 12332,
+      "sha256": "9286acfb80d0630d0f9cc517c1d5ffc004d87ea064125554899383895fe2c2df"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/BodyContactFriction.java",
@@ -452,6 +467,11 @@
       "sha256": "41f9565e62ebb18f574918b7d6196928052f0ff2767ed5cad5ce3a01352c7b85"
     },
     {
+      "path": "src/main/java/com/g9third/pmweatheriv/physics/BodyTerrainImpactPolicy.java",
+      "bytes": 7215,
+      "sha256": "cd9c7156587f95b111e0eca71bbc8870965f07df10c42f6b8db5a0e5c6c28f73"
+    },
+    {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/ControlSurfaceClassifier.java",
       "bytes": 3894,
       "sha256": "ee18d230d87c3792157ac436062f456ab50c35abdc0096421345b0c73a985a1a"
@@ -460,6 +480,11 @@
       "path": "src/main/java/com/g9third/pmweatheriv/physics/FlightMath.java",
       "bytes": 17931,
       "sha256": "b1e1486eac54222ca65bc8d8ee0c1816f32a259682a301336821395934a47033"
+    },
+    {
+      "path": "src/main/java/com/g9third/pmweatheriv/physics/GearImpactContact.java",
+      "bytes": 1597,
+      "sha256": "cf5b4f92b286b868065237514dc6aac7957a352c2b35778dd6e65ab714cf73c7"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/GroundContactImpulseSolver.java",
@@ -488,8 +513,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/LandingGearSolver.java",
-      "bytes": 52019,
-      "sha256": "f6a87e8bdb9dcf1b87c05d1c4016071615389485245a9c2c144db71dcb02f6f4"
+      "bytes": 51977,
+      "sha256": "ee68368bfa16f791026f12d1225f6bebf91344c8f90212c72c246304a998c740"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/LiftingPatchGeometry.java",
@@ -562,24 +587,19 @@
       "sha256": "9245b9a61c3f1259b46b20b610107af3b1848b0ce18e23eaf0ff01c1c1e7d632"
     },
     {
-      "path": "src/main/java/com/g9third/pmweatheriv/physics/RoadSuspensionModel.java",
-      "bytes": 21086,
-      "sha256": "cedc60b1e957f5cac4aad6a414fb185588274a19f0bff92d0e36bbe795688dcc"
-    },
-    {
-      "path": "src/main/java/com/g9third/pmweatheriv/physics/RoadSuspensionPartAccess.java",
-      "bytes": 277,
-      "sha256": "e791150310af3d909aee35b32ffdd60b901ebabd2fa9c2e0882a99304ab1b15a"
-    },
-    {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/RoadTireControls.java",
       "bytes": 2443,
       "sha256": "bc7fa49fb7c0838e79447dbe9d7150ac6789252b691d1c9fb1c628943c89c7f7"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/RoadVehiclePhysics.java",
-      "bytes": 18588,
-      "sha256": "63f8c6bf925e052ede190d3d5d66f6e7eae984dac1fec7562aa5db34780237a0"
+      "bytes": 20123,
+      "sha256": "e2175d05589c0321dc8510631a9b66c6380a8388c6a4a4de5d5a227f174d5898"
+    },
+    {
+      "path": "src/main/java/com/g9third/pmweatheriv/physics/RoadWindTraction.java",
+      "bytes": 4522,
+      "sha256": "446536795811cd214518728e67fbe930532fdc0e0ac16a402831ff9dbcc1a45d"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/RotorModel.java",
@@ -602,6 +622,11 @@
       "sha256": "05a403246d8ac19566adad867515386403d52b6fc0337aaeec10187ec7ac06b9"
     },
     {
+      "path": "src/main/java/com/g9third/pmweatheriv/physics/SpawnTerrainDamageGrace.java",
+      "bytes": 472,
+      "sha256": "9fd9f4b88d788f0f2ff0f7911a3f635839aeb47f5661aada9fe3f1e714a832e2"
+    },
+    {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/StructuralDamageMask.java",
       "bytes": 5061,
       "sha256": "b924b12550452fd0b079191278add894d4e0550bff955a17c243f966c7379a5a"
@@ -617,14 +642,19 @@
       "sha256": "b8d94b32f2a07ad2ac8a3bba2ea1c299e88328e7be43d2657bc73e14e4ee3e6e"
     },
     {
+      "path": "src/main/java/com/g9third/pmweatheriv/physics/TerrainContactGeometry.java",
+      "bytes": 3449,
+      "sha256": "cf428fa0bfc9359c70d93a95da1a787a1dc42aea46f6379072f9ada62815239d"
+    },
+    {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/TireContactMaterial.java",
       "bytes": 5819,
       "sha256": "17365e40acec47019ec37ac52483ce9f67f5c2bc60c19d49697320baf7959f30"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/TireNormalCompliance.java",
-      "bytes": 8095,
-      "sha256": "5ed290e193271b62fc965807cece8d15df134d36e3efa110fae7a06e82789584"
+      "bytes": 6005,
+      "sha256": "58dc28db529c948866d7002a4f067f7d6289a762e663dfcda6da42bb8bd118a4"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/physics/TrimResponseRegression.java",
@@ -642,24 +672,39 @@
       "sha256": "fc62befa94ed90e218a2d6b82ce14d990ec18292c0164abfd6cfa358324fd81f"
     },
     {
+      "path": "src/main/java/com/g9third/pmweatheriv/sable/NativeEntityContactAccess.java",
+      "bytes": 260,
+      "sha256": "c8585fad9c931c6c922078c92a3ac5263979e9e01c4c9a6a8a69a4f108925537"
+    },
+    {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/OrientedDamageQuery.java",
       "bytes": 5908,
       "sha256": "20509042bdc3163f47492fa99e93714405d14ffa4bcb0dbc7115fe26df20315e"
     },
     {
+      "path": "src/main/java/com/g9third/pmweatheriv/sable/OrientedEntityAabb.java",
+      "bytes": 525,
+      "sha256": "c2042a036f00a308dad14cac2db061fef51333d7c38c7ddc99974963a79276a6"
+    },
+    {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/OrientedEntityContact.java",
-      "bytes": 23383,
-      "sha256": "4eecfed7d576cfafee761749abdb4e2fa0bb8a8708438b06554cca2eda7758da"
+      "bytes": 24391,
+      "sha256": "76401d7a566c19d3abfa3ec711070317ac20ce0c4c2584bafdac3f1aefb21136"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/OrientedEntityRideSupport.java",
-      "bytes": 5804,
-      "sha256": "723242ab2aa1d5c300c380a24128115ae23a30c50aa090f4e9ef3d7132448c12"
+      "bytes": 6527,
+      "sha256": "443ca1c88dd79df5f3186a00eab01316f401328cffa321032fdc9c2071368d23"
+    },
+    {
+      "path": "src/main/java/com/g9third/pmweatheriv/sable/OrientedEntityVoxelShape.java",
+      "bytes": 2947,
+      "sha256": "d1839cd8798166dc5ab72bec7ca09364aede696fcdc9d56ffb4f1e0747741ebc"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/OrientedHitboxRegistry.java",
-      "bytes": 44634,
-      "sha256": "709c743fc5ad28bcaf453edc01460b73c9fc2edc9c44d3fc30b2dda534558b1c"
+      "bytes": 46082,
+      "sha256": "ccb6205baf5d81df5e2822fc0b62a4992caa785e8d4775509a8809fe6024b1cd"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/SableCollisionCapture.java",
@@ -668,8 +713,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/SableCollisionGameplay.java",
-      "bytes": 41436,
-      "sha256": "ce24f3122fff34b567c10acf68e28b90d26349db09d8d25e8ada133c6c4c2625"
+      "bytes": 42872,
+      "sha256": "78e971a32aa2aa40d74485a6de3cf19e5220f91e29c03fcbc6c9c28a700d81b8"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/SableCompoundCollider.java",
@@ -688,23 +733,23 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/SableTerrainResponse.java",
-      "bytes": 59039,
-      "sha256": "6bd8774b5b30fc394a83ccf6995cdc22014b6944371b8e8820f0f41445f64774"
+      "bytes": 65506,
+      "sha256": "32e89d5311688a2030b035212a432ca53f338923c64337018aced2a740c9cc2b"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/SableTerrainSweep.java",
-      "bytes": 52120,
-      "sha256": "18550692246f4faedfbbc7e2914437a2fc04508897e2d6efddfaffc409245ce8"
+      "bytes": 54346,
+      "sha256": "b3d6a0e7ad29ba1e046d29be1227459899534dc5047678e9585e91cb6a420ce5"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/SableVehicleBody.java",
-      "bytes": 171257,
-      "sha256": "f0759a4b8fed4d926370d33716603595ed2ef7c4d0cf97b066711914b531b18c"
+      "bytes": 164521,
+      "sha256": "b57b7d9a0650757c865653d45bbd6e47e0a19618992e651bedb15bcb1f1f4dd6"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/SableVehicleManager.java",
-      "bytes": 47268,
-      "sha256": "81877a690cd790b7c738691fdd6b2f778a52fefd2431c6606fb93297395e5e41"
+      "bytes": 45481,
+      "sha256": "a6f93a7805e713fc80aa029665c363b40c85f964699dc437024197ee5cbab78b"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/sable/StableCollisionTopology.java",
@@ -713,13 +758,13 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/terrain/AircraftTerrainImpact.java",
-      "bytes": 3227,
-      "sha256": "198ff8280ba93497eb31fbe1e45293ccc39fc58ebc740d14e3ce7737c075b732"
+      "bytes": 4550,
+      "sha256": "7c3c74e1f89ae639351267ab101895ab0f5871377550784909fbb2698c179ce4"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/terrain/trueimpact/ExternalWorldImpactModel.java",
-      "bytes": 27959,
-      "sha256": "d944dba8595d6eb40cf59fd41f858a3e91f2ee94a003b6e15d5acc90778f4bf8"
+      "bytes": 31335,
+      "sha256": "5f67aeeac61bd89b91ace5a56c306c4e793a950d3343a82f9d5a66521b2edc4c"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/terrain/trueimpact/IntegratedImpactSettings.java",
@@ -728,8 +773,13 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/terrain/trueimpact/IntegratedImpactTerrain.java",
-      "bytes": 12899,
-      "sha256": "e088dd7d0a9edc5d0d0fd19ab6af9e2e62ad65339c936799a18f12c91ad6d1dc"
+      "bytes": 13570,
+      "sha256": "5b5522ce433617edbac23bec53fac3614f8fb1677414fe7ad3dee04123f69c39"
+    },
+    {
+      "path": "src/main/java/com/g9third/pmweatheriv/terrain/trueimpact/SweptContactVolume.java",
+      "bytes": 4294,
+      "sha256": "dfd960e8a25133ee55c800d674740b7986fe36205747d8436be933e60d253d83"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/terrain/trueimpact/damage/ApplyOutcome.java",
@@ -778,8 +828,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/terrain/trueimpact/damage/DeferredDamageEvent.java",
-      "bytes": 1209,
-      "sha256": "5a0de9aa4b7c127f13e417ee4caf38196ec257ea16e67d62d68f219a5e12b4ec"
+      "bytes": 1839,
+      "sha256": "027c81cb4efa01e844390309642c82d6d2594c27354186f2a51bb330316b428a"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/terrain/trueimpact/damage/DeferredDamageQueue.java",
@@ -813,18 +863,18 @@
     },
     {
       "path": "src/main/resources/META-INF/neoforge.mods.toml",
-      "bytes": 1482,
-      "sha256": "c059063f71027b765a496a47c73b119c1423732a02193d996883c3fc1a1dd069"
+      "bytes": 1489,
+      "sha256": "c248db757c4feadca094f64e293488ee7f1ee8415f559a1ddddf228ab942627a"
     },
     {
       "path": "src/main/resources/assets/pmweather_iv/lang/en_us.json",
-      "bytes": 2763,
-      "sha256": "a60903f2880eb84af8d029a7dcdf37a4cc496e2379878598dffbcfa5db37780e"
+      "bytes": 2983,
+      "sha256": "5fee59ed495cef3cb3b2850733ba22859e74cf046d688a73f08be600c8d55918"
     },
     {
       "path": "src/main/resources/pmweather_iv.mixins.json",
-      "bytes": 1052,
-      "sha256": "83e0603eb64a7d3d458cba1905790ab4ddf06e8709d03908a9caf7c359cd3646"
+      "bytes": 1080,
+      "sha256": "e888d7677c6f8715e3d4bc7269bb95e61385fa53ec90182da75225e2ebe1cf42"
     },
     {
       "path": "tools/AnimationEvidenceRegression.java",
@@ -838,13 +888,13 @@
     },
     {
       "path": "tools/AutoTrimRegression.java",
-      "bytes": 13216,
-      "sha256": "ca0a4af4666571e16d64b6c2405228da510da2ee4bf1acc06e60b4010d1b3e50"
+      "bytes": 20517,
+      "sha256": "f0586b6f140bd9decd285f6a73ce91560e80b1c10be68c659349035b26276fc2"
     },
     {
       "path": "tools/ContactLifecycleRegression.java",
-      "bytes": 10925,
-      "sha256": "4b76152f2ef191eeb7d69466fdd99d18170c75f5a972e7fbf3b99afd7dc520b3"
+      "bytes": 20622,
+      "sha256": "f034d444cba985e5698b3fa9a2efdd075e64ebb31cc06d726ce84cb64f13501c"
     },
     {
       "path": "tools/CoordinateContactRegression.java",
@@ -855,6 +905,16 @@
       "path": "tools/CrashGeometryCacheRegression.java",
       "bytes": 4078,
       "sha256": "5293202592b792d37e239411438646476e964590ace36475cf196f96492808ca"
+    },
+    {
+      "path": "tools/EntitySurfaceContactRegression.java",
+      "bytes": 8804,
+      "sha256": "63c94132630910a798c0443625b8c7c4fcde7063270888797e06fa246f713279"
+    },
+    {
+      "path": "tools/GearImpactContactRegression.java",
+      "bytes": 4076,
+      "sha256": "5779da7002f94c64292475d59610b559768ee4e7af081363e0334f9b9352ff77"
     },
     {
       "path": "tools/GeometryRegression.java",
@@ -893,13 +953,13 @@
     },
     {
       "path": "tools/RigidTerrainContactRegression.java",
-      "bytes": 3688,
-      "sha256": "ad8853b44b29a0bcb04d38f6a038ed0b4acc3c97a20dbdd8e2038852d7913bf6"
+      "bytes": 7608,
+      "sha256": "01fcaf4099793cbb0ad2e760acb22fcf6654683f35806f9a51d596aafcd01dc0"
     },
     {
       "path": "tools/RoadSuspensionRegression.java",
-      "bytes": 20917,
-      "sha256": "a39b3cce6ceb2c986fd83eb4cfa0853146812eb0b1e51760188ccbe501410752"
+      "bytes": 15763,
+      "sha256": "c0874783d78002b92b8e55bc983d8ebaa216554464c353e6a3e709df41de8e77"
     },
     {
       "path": "tools/RoadVehicleCompatibilityRegression.java",
@@ -907,9 +967,14 @@
       "sha256": "01dfefb07041dd26220e9d2cca8614ada397b10c7368b7354e777a8f88d97223"
     },
     {
+      "path": "tools/SweptContactVolumeRegression.java",
+      "bytes": 4611,
+      "sha256": "38a720c9a127a8807f3da108d57c86e3fa876e0664774c312f28f94d76349538"
+    },
+    {
       "path": "tools/TerrainGeometryRegression.java",
-      "bytes": 8416,
-      "sha256": "899a9ca0ac07a107fe78e69c6db8f8769e363695ec8c4dc168e4475c39d017ee"
+      "bytes": 11075,
+      "sha256": "9ff3c2c51afa9ed436a05b5a7715bdf3ffa0320a0475a3e299aece50a31b295e"
     },
     {
       "path": "tools/TerrainGeometryRegression.sha256",
@@ -923,8 +988,8 @@
     },
     {
       "path": "tools/package_source.py",
-      "bytes": 3324,
-      "sha256": "f2b1d4caadd597d01977b08d8a7a5ab6a9b4a0013a2807ac6bcb1ecab8c86b93"
+      "bytes": 3527,
+      "sha256": "f49a092194680028a26c4b97cc8552cc8ceaaa4c617469326bddc911f46fe733"
     }
   ]
 }

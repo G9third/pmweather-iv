@@ -10,7 +10,6 @@ import com.g9third.pmweatheriv.physics.AircraftPhysics;
 import com.g9third.pmweatheriv.physics.RotorModel;
 import com.g9third.pmweatheriv.physics.PropulsionModel;
 import com.g9third.pmweatheriv.physics.LandingGearSolver;
-import com.g9third.pmweatheriv.physics.RoadSuspensionModel;
 import com.g9third.pmweatheriv.physics.TireNormalCompliance;
 import com.g9third.pmweatheriv.physics.AircraftWind;
 import com.g9third.pmweatheriv.physics.AirframeLoads;
@@ -143,6 +142,21 @@ public final class SableVehicleBody extends BoxPhysicsObject {
     private static final double CRASH_EPISODE_SETTLED_POINT_SPEED_MPS = 0.75;
     private static final int CRASH_EPISODE_SETTLED_TICKS = 10;
 
+    private final com.g9third.pmweatheriv.physics.BodyTerrainImpactPolicy terrainImpactPolicy =
+        new com.g9third.pmweatheriv.physics.BodyTerrainImpactPolicy();
+
+    com.g9third.pmweatheriv.physics.BodyTerrainImpactPolicy.Decision classifyTerrainImpact(
+        Vector3dc outwardNormal, double inwardSpeedMps, double normalImpulseNs
+    ) {
+        var decision = terrainImpactPolicy.classify(level.getGameTime(),
+            outwardNormal == null ? null : toVec3d(outwardNormal), inwardSpeedMps, normalImpulseNs);
+        if (PMIVObserver.isCapturing(vehicle.uniqueUUID)) {
+            PMIVObserver.captureSupportTerrainContact(vehicle.uniqueUUID, level.getGameTime(),
+                inwardSpeedMps, decision.freshContact(), decision.damageEligible(), decision.reason());
+        }
+        return decision;
+    }
+
     final EntityVehicleF_Physics vehicle;
     final ServerLevel level;
     double mass;
@@ -154,6 +168,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
     private final String modelLocation;
     private final @Nullable BodyState initialState;
     private final boolean initialGroundSeatingAllowed;
+    private final boolean placedByPlayer;
     /** Largest measured/cached full-body footprint; survives collider removal on chunk unload. */
     private double retainedLoadingRadius;
 
@@ -175,8 +190,6 @@ public final class SableVehicleBody extends BoxPhysicsObject {
     private AirframeLoads.SolveResult lastTickResult;
     private LandingGearSolver.LandingGearConstraintResult lastSubstepLandingGear;
     /** Axial wheel travel keyed by authored real ground-device master parts. */
-    private final Map<PartGroundDevice, Double> roadSuspensionTravel = new IdentityHashMap<>();
-    private long lastRoadSuspensionPublishTick = Long.MIN_VALUE;
 
     final Vector3d temporaryLinearVelocityWorld = new Vector3d();
     private final Vector3d temporaryPredictedLinearVelocityWorld = new Vector3d();
@@ -283,6 +296,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             : initialResult.model().modelLocation();
         this.initialState = initialState;
         this.initialGroundSeatingAllowed = initialGroundSeatingAllowed;
+        this.placedByPlayer = placingPlayerPresent();
         this.retainedLoadingRadius = finitePositiveRadius(retainedLoadingRadius);
         this.cachedOrientation.set(SablePoseConversions.toQuaternion(vehicle.orientation));
         if (initialState != null) {
@@ -557,29 +571,6 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         return vehicle;
     }
 
-    public double roadSuspensionTravel(PartGroundDevice device) {
-        PartGroundDevice master = RoadSuspensionModel.masterPart(device);
-        Double travel = master == null ? null : roadSuspensionTravel.get(master);
-        return travel != null && Double.isFinite(travel) ? travel : 0.0;
-    }
-
-    public Map<UUID, Double> roadSuspensionOffsets() {
-        Map<UUID, Double> result = new java.util.HashMap<>();
-        roadSuspensionTravel.forEach((device, travel) -> {
-            if (device != null && !(device instanceof minecrafttransportsimulator.entities.instances.PartGroundDeviceFake)
-                && device.uniqueUUID != null && travel != null && Double.isFinite(travel)) {
-                result.put(device.uniqueUUID, travel);
-            }
-        });
-        return Map.copyOf(result);
-    }
-
-    public boolean markRoadSuspensionPublished(long tick) {
-        if (tick == lastRoadSuspensionPublishTick) return false;
-        lastRoadSuspensionPublishTick = tick;
-        return true;
-    }
-
     public ServerLevel level() {
         return level;
     }
@@ -839,6 +830,8 @@ public final class SableVehicleBody extends BoxPhysicsObject {
     }
 
     boolean terrainDamageAllowedForCurrentCrashEpisode() {
+        if (!com.g9third.pmweatheriv.physics.SpawnTerrainDamageGrace.allowsTerrainDamage(
+                placedByPlayer, vehicle.ticksExisted)) return false;
         if (!vehicle.outOfHealth) {
             return true;
         }
@@ -861,7 +854,6 @@ public final class SableVehicleBody extends BoxPhysicsObject {
     int crashEpisodeSettledTicks() {
         return crashEpisodeSettledTicks;
     }
-
 
     public boolean needsMassRefresh(AirframeLoads.SolveResult result) {
         if (relativeDifference(mass, result.mass()) > 0.001) {
@@ -1487,6 +1479,8 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         }
 
         long solveStart = profileGear ? System.nanoTime() : 0L;
+        boolean roadLoadsAvailable = !vehicle.definition.motorized.isAircraft && cachedAircraftState != null
+            && lastLoadsGameTime != Long.MIN_VALUE && level.getGameTime()-lastLoadsGameTime<=2;
         LandingGearSolver.LandingGearConstraintResult result =
             LandingGearSolver.solveLandingGearConstraints(
                 vehicle,
@@ -1506,16 +1500,13 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                 timeStep,
                 physicalContacts,
                 centerOfMassLocal,
-                !vehicle.definition.motorized.isAircraft && cachedAircraftState != null
-                    && lastLoadsGameTime != Long.MIN_VALUE && level.getGameTime()-lastLoadsGameTime<=2
-                        ? cachedAircraftState.roadDrive : null
+                roadLoadsAvailable ? cachedAircraftState.roadDrive : null,
+                roadLoadsAvailable ? cachedAircraftState.roadWindTraction : null,
+                roadLoadsAvailable ? cachedAircraftState.roadWeatherForceWorld : Vec3d.ZERO
             );
         if (profileGear) PMIVObserver.capturePerformance(vehicle.uniqueUUID,
                 "landing_gear_constraint_solve", System.nanoTime() - solveStart);
         lastSubstepLandingGear = result;
-        Vector3d bodyUpWorld = cachedOrientation.transform(new Vector3d(0.0, 1.0, 0.0));
-        updateRoadSuspensionTravel(result, timeStep, liveConstraintMass,
-            Math.max(0.0, bodyUpWorld.y()));
         if (cachedAircraftState != null)
             cachedAircraftState.rotorcraftGroundSupported = result.totalNormalImpulseNewtonSeconds()>1e-6;
 
@@ -1560,58 +1551,6 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         );
     }
 
-    /** Updates one shared suspension displacement per authored wheel/tread assembly. */
-    private void updateRoadSuspensionTravel(
-        LandingGearSolver.LandingGearConstraintResult result,
-        double timeStep,
-        double liveMass,
-        double verticalProjection
-    ) {
-        if (vehicle.definition.motorized.isAircraft || verticalProjection <= 0.25
-            || vehicle.allParts == null) {
-            roadSuspensionTravel.clear();
-            return;
-        }
-        Map<PartGroundDevice, Integer> supportCounts = new IdentityHashMap<>();
-        for (APart part : vehicle.allParts) {
-            if (!(part instanceof PartGroundDevice device) || device.isSpare || !device.isValid
-                || !device.isActiveVar.isActive || !RoadSuspensionModel.supportsFallback(vehicle, device)) continue;
-            PartGroundDevice master = RoadSuspensionModel.masterPart(device);
-            if (master != null) supportCounts.merge(master, 1, Integer::sum);
-        }
-        if (supportCounts.isEmpty()) {
-            roadSuspensionTravel.clear();
-            return;
-        }
-        // Fallback groups keep their share of the vehicle's total support mass.
-        // Native-motion supports still carry their authored share; dividing only
-        // by fallback groups would over-stiffen the remaining fallback wheels.
-        int totalSupports = TireNormalCompliance.installedSupportCount(vehicle);
-        Map<PartGroundDevice, Double> totalNormalForce = new IdentityHashMap<>();
-        if (result != null && timeStep > 0.0) {
-            for (LandingGearSolver.LandingGearContactSnapshot contact : result.contacts()) {
-                PartGroundDevice device = contact.device();
-                if (!contact.roadSuspension() || device == null) continue;
-                PartGroundDevice master = RoadSuspensionModel.masterPart(device);
-                if (master == null || !supportCounts.containsKey(master)) continue;
-                double force = contact.normalImpulseNewtonSeconds() / timeStep;
-                if (Double.isFinite(force) && force > 0.0)
-                    totalNormalForce.merge(master, force, Double::sum);
-            }
-        }
-        roadSuspensionTravel.keySet().removeIf(master -> !supportCounts.containsKey(master));
-        for (Map.Entry<PartGroundDevice, Integer> entry : supportCounts.entrySet()) {
-            PartGroundDevice master = entry.getKey();
-            int count = entry.getValue();
-            double groupMass = Math.max(1.0, liveMass) * count / Math.max(1, totalSupports);
-            double sag = RoadSuspensionModel.sagMeters(master);
-            double previous = roadSuspensionTravel.getOrDefault(master, 0.0);
-            double next = RoadSuspensionModel.nextTravelMeters(previous,
-                totalNormalForce.getOrDefault(master, 0.0), groupMass, sag, timeStep, verticalProjection);
-            roadSuspensionTravel.put(master, next);
-        }
-    }
-
     /**
      * Builds physical wheel contacts directly from the current rigid pose.
      * Contact becomes exact either when the tire-bottom station reaches a
@@ -1640,24 +1579,8 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                     continue;
                 }
                 ++activeGroundDeviceCount;
-                double verticalProjection = Math.max(0.0,
-                    cachedOrientation.transform(new Vector3d(0.0, 1.0, 0.0)).y());
-                boolean roadSuspension = verticalProjection > 0.25
-                    && RoadSuspensionModel.supportsFallback(vehicle, device);
-                Vec3d pointLocal;
-                RoadContact roadContact = null;
-                if (roadSuspension) {
-                    Vec3d centerLocal = RoadSuspensionModel.baseCenterLocal(device);
-                    double travel = roadSuspensionTravel(device);
-                    Vec3d basePoint = centerLocal == null ? null
-                        : RoadSuspensionModel.supportPointLocal(device, centerLocal, temporaryPhysicalOrientation);
-                    pointLocal = basePoint == null ? null : basePoint.add(new Vec3d(0.0, travel, 0.0));
-                    if (pointLocal != null) roadContact = new RoadContact(
-                        travel, RoadSuspensionModel.sagMeters(device), verticalProjection);
-                } else {
-                    pointLocal = LandingGearSolver.landingGearDeviceContactPointLocal(
-                        device, temporaryPhysicalOrientation);
-                }
+                Vec3d pointLocal = LandingGearSolver.landingGearDeviceContactPointLocal(
+                    device, temporaryPhysicalOrientation);
                 if (pointLocal == null || !pointLocal.isFinite()) {
                     continue;
                 }
@@ -1665,7 +1588,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                     contacts, device, pointLocal, "GROUND_DEVICE",
                     timeStep, predictedLinearVelocityWorld, bodyPosition, omegaWorld,
                     device.definition != null && device.definition.ground != null
-                        && device.definition.ground.canFloat, false, roadContact
+                        && device.definition.ground.canFloat, false
                 );
             }
         }
@@ -1787,23 +1710,6 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         boolean allowLiquid,
         boolean liquidOnly
     ) {
-        addLiveTerrainSupportContact(contacts, device, pointLocal, sourceMode, timeStep,
-            predictedLinearVelocityWorld, bodyPosition, omegaWorld, allowLiquid, liquidOnly, null);
-    }
-
-    private void addLiveTerrainSupportContact(
-        List<LandingGearSolver.LandingGearPhysicalContact> contacts,
-        @Nullable PartGroundDevice device,
-        Vec3d pointLocal,
-        String sourceMode,
-        double timeStep,
-        Vector3dc predictedLinearVelocityWorld,
-        Vector3d bodyPosition,
-        Vector3d omegaWorld,
-        boolean allowLiquid,
-        boolean liquidOnly,
-        @Nullable RoadContact roadContact
-    ) {
         Vector3d leverWorld = new Vector3d(
             pointLocal.x() - centerOfMassLocal.x(),
             pointLocal.y() - centerOfMassLocal.y(),
@@ -1826,7 +1732,6 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             LIVE_GEAR_PROXIMITY_METERS,
             crossingDistance + LIVE_GEAR_CONTACT_SKIN_METERS
         );
-        Vector3d wheelUp = cachedOrientation.transform(new Vector3d(0, 1, 0));
         double wheelRadius = device != null && device.definition.ground.isWheel
                 && Double.isFinite(device.getHeight()) ? Math.max(0.0, device.getHeight() * 0.5) : 0.0;
         TerrainSupportSample support = liveTerrainSupport(
@@ -1907,16 +1812,9 @@ public final class SableVehicleBody extends BoxPhysicsObject {
             penetration, exact, normalVelocityTarget,
             Math.max(0.0, -inwardVelocity),
             new Vec3d(pointWorld.x, pointWorld.y, pointWorld.z),
-            support.blockPos(), false,
-            roadContact == null ? Double.NaN : RoadSuspensionModel.complianceGapMeters(
-                gap, roadContact.travelMeters(), Math.max(0.0,
-                    wheelUp.x * normal.x() + wheelUp.y * normal.y() + wheelUp.z * normal.z()),
-                roadContact.sagMeters()),
-            roadContact != null, normal
+            support.blockPos(), false, normal
         ));
     }
-
-    private record RoadContact(double travelMeters, double sagMeters, double verticalProjection) {}
 
     /**
      * Returns the highest eligible solid collision-shape or authored float
@@ -2145,9 +2043,10 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         }
         double width = contact.device().getWidth();
         double height = contact.device().getHeight();
-        double projectedAreaM2 = Double.isFinite(width) && width > 0.0
-            && Double.isFinite(height) && height > 0.0
-                ? width * height : 0.0;
+        double projectedAreaM2 = com.g9third.pmweatheriv.physics.GearImpactContact.area(
+            width, height, TireNormalCompliance.nominalDeflection(contact.device()),
+            contact.penetrationDepthMeters(), contact.device().definition.ground.isWheel
+                && !contact.device().flatVar.isActive);
         if (!(projectedAreaM2 > 0.0)) {
             return contact;
         }
@@ -2165,7 +2064,7 @@ public final class SableVehicleBody extends BoxPhysicsObject {
                 contact.worldPoint().x(), contact.worldPoint().y(), contact.worldPoint().z()
             ),
             new Vector3d(contact.normalWorld().x(), contact.normalWorld().y(), contact.normalWorld().z()),
-            projectedAreaM2, rigidStopImpulseNs, inwardSpeed, maxTravelMeters
+            projectedAreaM2, rigidStopImpulseNs, inwardSpeed, maxTravelMeters, vehicle.uniqueUUID
         );
         if (resolution == null || !resolution.accepted()) {
             return contact;
@@ -2271,8 +2170,6 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         if (vehicle.allParts == null || vehicle.outOfHealth || compoundCollider == null) return;
         updatePose();
         Quaterniond orientation = new Quaterniond(getPose().orientation()).normalize();
-        double verticalProjection = Math.max(0.0,
-            orientation.transform(new Vector3d(0.0, 1.0, 0.0)).y);
         RotationMatrix physicalOrientation = new RotationMatrix();
         SablePoseConversions.writeRotationMatrix(orientation, physicalOrientation);
         Vector3d origin = modelOriginFromCenterOfMassWorld(getPose().position(), orientation);
@@ -2281,41 +2178,16 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         for (APart part : vehicle.allParts) {
             if (!(part instanceof PartGroundDevice device)
                 || !com.g9third.pmweatheriv.physics.TireContactMaterial.activeSupport(device)) continue;
-            boolean roadSuspension = verticalProjection > 0.25
-                && RoadSuspensionModel.supportsFallback(vehicle, device);
-            double travel = roadSuspension ? roadSuspensionTravel(device) : 0.0;
-            Vec3d local;
-            if (roadSuspension) {
-                Vec3d center = RoadSuspensionModel.baseCenterLocal(device);
-                Vec3d basePoint = center == null ? null
-                    : RoadSuspensionModel.supportPointLocal(device, center, physicalOrientation);
-                local = basePoint == null ? null : basePoint.add(new Vec3d(0.0, travel, 0.0));
-            } else {
-                local = LandingGearSolver.landingGearDeviceContactPointLocal(device, physicalOrientation);
-            }
+            Vec3d local = LandingGearSolver.landingGearDeviceContactPointLocal(device, physicalOrientation);
             if (local == null || !local.isFinite()) continue;
             Vector3d point = orientation.transform(new Vector3d(local.x(), local.y(), local.z())).add(origin);
             TerrainSupportSample support = liveTerrainSupport(point.x, point.y, point.z,
                 LIVE_GEAR_PROXIMITY_METERS, device.definition.ground.canFloat, false);
             if (support == null || support.liquid()) continue;
             double gap = point.y - support.topY();
-            double baseGap = roadSuspension ? gap - travel * verticalProjection : gap;
-            double required;
-            if (roadSuspension) {
-                double bodyTravelCorrection = RoadSuspensionModel.roadPoseCorrectionMeters(
-                    baseGap, device, verticalProjection, LIVE_GEAR_CONTACT_SKIN_METERS);
-                double tireOrHardwareCorrection =
-                    com.g9third.pmweatheriv.physics.TireNormalCompliance.upwardRoadPoseCorrection(
-                        gap, device.definition.ground.isWheel
-                            ? com.g9third.pmweatheriv.physics.TireNormalCompliance.nominalDeflection(device)
-                            : 0.0,
-                        LIVE_GEAR_CONTACT_SKIN_METERS);
-                required = Math.max(bodyTravelCorrection, tireOrHardwareCorrection);
-            } else {
-                required = com.g9third.pmweatheriv.physics.TireNormalCompliance.upwardPoseCorrection(
-                    gap, com.g9third.pmweatheriv.physics.TireNormalCompliance.nominalDeflection(device),
-                    LIVE_GEAR_CONTACT_SKIN_METERS);
-            }
+            double required = com.g9third.pmweatheriv.physics.TireNormalCompliance.upwardPoseCorrection(
+                gap, com.g9third.pmweatheriv.physics.TireNormalCompliance.nominalDeflection(device),
+                LIVE_GEAR_CONTACT_SKIN_METERS);
             if (required > correction) { correction = required; worstGap = gap; }
         }
         if (!(correction > 1.0e-5) || correction > LIVE_GEAR_MAX_PENETRATION_METERS) return;
@@ -3268,7 +3140,6 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         );
     }
 
-
     static boolean finite(Vector3dc value) {
         return value != null
             && Double.isFinite(value.x())
@@ -3479,7 +3350,8 @@ public final class SableVehicleBody extends BoxPhysicsObject {
         double inwardPointSpeedMetersPerSecond,
         double normalImpulseNewtonSeconds,
         float preImpactBlockHardness,
-        Resolution trueImpactResolution
+        Resolution trueImpactResolution,
+        boolean terrainDamageEligible
     ) {
     }
 

@@ -12,12 +12,13 @@ import net.neoforged.fml.common.Mod;
 @Mod(value = PMWeatherIV.MOD_ID, dist = Dist.CLIENT)
 public final class PMWeatherIVClient {
     public PMWeatherIVClient(IEventBus modBus, ModContainer modContainer) {
+        modContainer.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT, PMIVClientConfig.SPEC);
         PMIVObserver.initializeClient(modBus, modContainer);
         modBus.addListener(AutoTrimClient::registerKeyMappings);
         modBus.addListener(ClientWindMonitor::registerGuiLayer);
+        modBus.addListener(AutoTrimClient::registerGuiLayer);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(ClientWindMonitor::registerCommands);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(ClientWindMonitor::onClientTick);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(AutoTrimClient::onClientTick);
-        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(AutoTrimClient::renderBadge);
     }
 }

@@ -7,6 +7,8 @@ import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
 import minecrafttransportsimulator.entities.instances.PartPropeller;
 import minecrafttransportsimulator.jsondefs.AJSONMultiModelProvider;
 import minecrafttransportsimulator.jsondefs.JSONVariableModifier;
+import minecrafttransportsimulator.jsondefs.JSONAction;
+import minecrafttransportsimulator.jsondefs.JSONAnimationDefinition;
 import minecrafttransportsimulator.mcinterface.IWrapperNBT;
 
 /** Reversible PMIV trim offset for fixed-wing packs that author trim modifiers. */
@@ -33,6 +35,7 @@ public final class AutoTrimOffset {
         if (state.autoTrimOverlayDefinition != definition) {
             state.autoTrimOverlayDefinition = definition;
             state.autoTrimOverlayDefinitionHasModifier = hasElevatorTrimModifier(vehicle);
+            state.autoTrimAuthoredStepPerTick = Double.NaN;
             state.autoTrimOverlayPartCount = -1;
         }
         if (!state.autoTrimOverlayDefinitionHasModifier) return false;
@@ -42,6 +45,35 @@ public final class AutoTrimOffset {
             state.autoTrimOverlayPartsHaveRotor = hasRotorPart(vehicle);
         }
         return !state.autoTrimOverlayPartsHaveRotor;
+    }
+
+    /** Recognizes linear held-button trim actuators without depending on pack/variable names. */
+    public static double maximumStepPerTick(EntityVehicleF_Physics vehicle) {
+        if (!usesAuthoredModifierOffset(vehicle)) return AutoTrimController.MAX_STEP_PER_TICK;
+        AircraftState state = ((AircraftStateAccess) vehicle).pmweatherIv$getAircraftState();
+        if (Double.isFinite(state.autoTrimAuthoredStepPerTick)) return state.autoTrimAuthoredStepPerTick;
+        double step = AutoTrimController.MAX_STEP_PER_TICK;
+        if (vehicle.definition.collisionGroups != null) {
+            for (var modifier : vehicle.definition.variableModifiers) {
+                if (modifier == null || !"trim_elevator".equals(modifier.variable) || modifier.animations == null) continue;
+                for (var animation : modifier.animations) {
+                    if (animation == null || animation.animationType != JSONAnimationDefinition.AnimationComponentType.TRANSLATION
+                        || animation.variable == null || animation.axis == null || !Double.isFinite(animation.axis.y)) continue;
+                    for (var group : vehicle.definition.collisionGroups) {
+                        if (group == null || group.collisions == null) continue;
+                        for (var box : group.collisions) {
+                            JSONAction action = box == null ? null : box.action;
+                            if (action == null || action.action != JSONAction.ActionType.BUTTON
+                                || !animation.variable.equals(action.variable) || !Double.isFinite(action.value)) continue;
+                            double authoredStep = Math.abs(action.value * animation.axis.y);
+                            if (authoredStep > 1.0e-6) step = Math.min(step, authoredStep);
+                        }
+                    }
+                }
+            }
+        }
+        state.autoTrimAuthoredStepPerTick = step;
+        return step;
     }
 
     public static double requested(EntityVehicleF_Physics vehicle) {

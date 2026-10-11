@@ -4,6 +4,7 @@ import com.g9third.pmweatheriv.terrain.trueimpact.ExternalWorldImpactModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import org.joml.Vector3d;
+import java.util.UUID;
 
 /**
  * PMIV-facing adapter for the integrated True Impact 0.5.8-derived terrain model.
@@ -37,6 +38,19 @@ public final class AircraftTerrainImpact {
         double normalImpulseNewtonSeconds,
         double inwardPointSpeedMetersPerSecond
     ) {
+        return submitExternalWorldImpact(level, blockPos, worldNormal,
+            normalImpulseNewtonSeconds, inwardPointSpeedMetersPerSecond, null);
+    }
+
+    /** Origin-aware overload for associating deferred terrain effects with a vehicle. */
+    public static double submitExternalWorldImpact(
+        ServerLevel level,
+        BlockPos blockPos,
+        Vector3d worldNormal,
+        double normalImpulseNewtonSeconds,
+        double inwardPointSpeedMetersPerSecond,
+        UUID originVehicleUuid
+    ) {
         if (level == null || blockPos == null) return 0.0;
         double nx = worldNormal == null ? Double.NaN : worldNormal.x;
         double ny = worldNormal == null ? Double.NaN : worldNormal.y;
@@ -45,7 +59,7 @@ public final class AircraftTerrainImpact {
             level,
             blockPos.getX(), blockPos.getY(), blockPos.getZ(),
             nx, ny, nz,
-            normalImpulseNewtonSeconds, inwardPointSpeedMetersPerSecond
+            normalImpulseNewtonSeconds, inwardPointSpeedMetersPerSecond, originVehicleUuid
         );
     }
 
@@ -64,6 +78,23 @@ public final class AircraftTerrainImpact {
         double inwardPointSpeedMetersPerSecond,
         double maxTravelMeters
     ) {
+        return resolveExternalPenetration(level, seedBlock, worldPoint, worldNormal,
+            projectedContactAreaSquareMeters, normalImpulseNewtonSeconds,
+            inwardPointSpeedMetersPerSecond, maxTravelMeters, null);
+    }
+
+    /** Origin-aware overload for associating deferred terrain effects with a vehicle. */
+    public static ExternalWorldImpactModel.Resolution resolveExternalPenetration(
+        ServerLevel level,
+        BlockPos seedBlock,
+        Vector3d worldPoint,
+        Vector3d worldNormal,
+        double projectedContactAreaSquareMeters,
+        double normalImpulseNewtonSeconds,
+        double inwardPointSpeedMetersPerSecond,
+        double maxTravelMeters,
+        UUID originVehicleUuid
+    ) {
         if (level == null || seedBlock == null || worldPoint == null || worldNormal == null) return null;
         return ExternalWorldImpactModel.resolveExternalPenetration(
                 level,
@@ -73,7 +104,8 @@ public final class AircraftTerrainImpact {
                 projectedContactAreaSquareMeters,
                 normalImpulseNewtonSeconds,
                 inwardPointSpeedMetersPerSecond,
-                maxTravelMeters
+                maxTravelMeters,
+                originVehicleUuid
             );
     }
 }

@@ -2,7 +2,6 @@ package com.g9third.pmweatheriv.network;
 
 import com.g9third.pmweatheriv.PMWeatherIV;
 import com.g9third.pmweatheriv.mixin.EntityVehiclePhysicsAccessor;
-import com.g9third.pmweatheriv.mixin.EntityVehicleMovingAccessor;
 import com.g9third.pmweatheriv.physics.AircraftState;
 import com.g9third.pmweatheriv.physics.AirframeLoads;
 import com.g9third.pmweatheriv.physics.AirWarningSystem;
@@ -21,7 +20,7 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
-/** Physical state and absolute origins for IV's cumulative client movement stream. */
+/** Physical state and complete authoritative poses for managed IV vehicles. */
 public final class AircraftStateNetwork {
     private static final Map<UUID, StatePayload> CLIENT = new HashMap<>();
     private static final Map<UUID, PoseAnchorPayload> CLIENT_POSE_ANCHORS = new HashMap<>();
@@ -30,7 +29,7 @@ public final class AircraftStateNetwork {
     private AircraftStateNetwork() {}
 
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("5");
+        var registrar = event.registrar("6");
         registrar.playToClient(StatePayload.TYPE, StatePayload.CODEC, (packet, context) -> {
             Level level = context.player().level();
             resetClientLevel(level);
@@ -79,8 +78,8 @@ public final class AircraftStateNetwork {
         access.pmweatherIv$setThrustForceValue(p.thrust());
     }
 
-    /** Uses the same delta stream as IV; the anchor repairs an initial/reconnect pose mismatch. */
-    public static CumulativePoseAnchor poseAnchor(EntityVehicleF_Physics vehicle) {
+    /** Does not depend on IV movement packets received before the entity was available. */
+    public static VehiclePoseSnapshot poseAnchor(EntityVehicleF_Physics vehicle) {
         PoseAnchorPayload p = CLIENT_POSE_ANCHORS.get(vehicle.uniqueUUID);
         StatePayload state = CLIENT.get(vehicle.uniqueUUID);
         if (p == null || state == null || !state.managed()) return null;
@@ -88,17 +87,12 @@ public final class AircraftStateNetwork {
         return p.anchor();
     }
 
-    /** Publish after IV updates its cumulative deltas, so pose and counters share one boundary. */
+    /** Publish the applied model-origin pose after IV completes its movement pass. */
     public static void publishPoseAnchor(EntityVehicleF_Physics vehicle, ServerLevel level) {
-        EntityVehicleMovingAccessor access = (EntityVehicleMovingAccessor) vehicle;
-        var movement = access.pmweatherIv$getServerDeltaM();
-        var rotation = access.pmweatherIv$getServerDeltaR();
         var angles = vehicle.orientation.angles;
-        CumulativePoseAnchor anchor = CumulativePoseAnchor.capture(
+        VehiclePoseSnapshot anchor = new VehiclePoseSnapshot(
             new Vec3d(vehicle.position.x, vehicle.position.y, vehicle.position.z),
-            new Vec3d(angles.x, angles.y, angles.z),
-            new Vec3d(movement.x, movement.y, movement.z),
-            new Vec3d(rotation.x, rotation.y, rotation.z));
+            new Vec3d(angles.x, angles.y, angles.z));
         if (!anchor.finite()) return;
         PoseAnchorPayload packet = new PoseAnchorPayload(vehicle.uniqueUUID,
             level.dimension().location(), level.getGameTime(), anchor);
@@ -106,20 +100,20 @@ public final class AircraftStateNetwork {
     }
 
     public record PoseAnchorPayload(UUID uuid, ResourceLocation dimension, long tick,
-                                   CumulativePoseAnchor anchor) implements CustomPacketPayload {
+                                   VehiclePoseSnapshot anchor) implements CustomPacketPayload {
         public static final Type<PoseAnchorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
             PMWeatherIV.MOD_ID, "vehicle_pose_anchor"));
         public static final StreamCodec<RegistryFriendlyByteBuf, PoseAnchorPayload> CODEC = new StreamCodec<>() {
             public PoseAnchorPayload decode(RegistryFriendlyByteBuf b) {
                 return new PoseAnchorPayload(b.readUUID(), b.readResourceLocation(), b.readVarLong(),
-                    new CumulativePoseAnchor(new Vec3d(b.readDouble(), b.readDouble(), b.readDouble()),
+                    new VehiclePoseSnapshot(new Vec3d(b.readDouble(), b.readDouble(), b.readDouble()),
                         new Vec3d(b.readDouble(), b.readDouble(), b.readDouble())));
             }
             public void encode(RegistryFriendlyByteBuf b, PoseAnchorPayload p) {
                 b.writeUUID(p.uuid()); b.writeResourceLocation(p.dimension()); b.writeVarLong(p.tick());
-                b.writeDouble(p.anchor().positionOrigin().x()); b.writeDouble(p.anchor().positionOrigin().y());
-                b.writeDouble(p.anchor().positionOrigin().z()); b.writeDouble(p.anchor().angleOrigin().x());
-                b.writeDouble(p.anchor().angleOrigin().y()); b.writeDouble(p.anchor().angleOrigin().z());
+                b.writeDouble(p.anchor().positionWorld().x()); b.writeDouble(p.anchor().positionWorld().y());
+                b.writeDouble(p.anchor().positionWorld().z()); b.writeDouble(p.anchor().anglesDegrees().x());
+                b.writeDouble(p.anchor().anglesDegrees().y()); b.writeDouble(p.anchor().anglesDegrees().z());
             }
         };
         public Type<? extends CustomPacketPayload> type() { return TYPE; }

@@ -129,9 +129,13 @@ public final class IntegratedImpactTerrain {
                 outcome = ImpactBlockApplicator.tryApply(new ServerLevelBlockView(level), event);
             }
 
-            if (outcome == ApplyOutcome.APPLIED) compacted++;
+            boolean blockCompacted = outcome == ApplyOutcome.APPLIED;
+            if (blockCompacted) compacted++;
 
-            if (snap == null) continue;
+            if (snap == null) {
+                captureDeferredTerrainResult(event, level, pos, false, blockCompacted);
+                continue;
+            }
             boolean blockBroken = false;
 
             if (ImpactRuntimeConfig.ENABLE_BLOCK_BREAKING
@@ -165,6 +169,7 @@ public final class IntegratedImpactTerrain {
                 }
             }
 
+            captureDeferredTerrainResult(event, level, pos, blockBroken, blockCompacted);
             if (blockBroken) continue;
 
             if (DamageFeedbackTracker.shouldEmit(
@@ -193,6 +198,14 @@ public final class IntegratedImpactTerrain {
                     + " crackUpdates=" + cracked
             );
             }
+        }
+    }
+
+    private static void captureDeferredTerrainResult(DeferredDamageEvent event, ServerLevel level,
+            BlockPos pos, boolean blockBroken, boolean blockCompacted) {
+        if (event.originVehicleUuid() != null) {
+            PMIVObserver.captureDeferredTerrainImpact(event.originVehicleUuid(), level.getGameTime(), pos,
+                event.kImpact(), blockBroken, blockCompacted);
         }
     }
 

@@ -10,6 +10,8 @@ public final class AircraftState {
     public AirframePlan plan;
     public RoadVehiclePhysics.BodyPlan roadBody;
     public RoadVehiclePhysics.DriveSnapshot roadDrive = RoadVehiclePhysics.DriveSnapshot.ZERO;
+    public Vec3d roadWeatherForceWorld = Vec3d.ZERO;
+    public final RoadWindTraction.State roadWindTraction = new RoadWindTraction.State();
     public List<PropulsionModel.PropulsionSnapshot> roadPropulsion = List.of();
     public List<PropulsionModel.PropulsionSample> roadPropulsionSamples = List.of();
     public long roadActuatorGameTime = Long.MIN_VALUE;
@@ -58,6 +60,7 @@ public final class AircraftState {
     public boolean autoTrimOverlayPassActive;
     public Object autoTrimOverlayDefinition;
     public boolean autoTrimOverlayDefinitionHasModifier;
+    public double autoTrimAuthoredStepPerTick = Double.NaN;
     public int autoTrimOverlayPartCount = -1;
     public boolean autoTrimOverlayPartsHaveRotor;
     public double autoTrimOverlayExpectedEffective = Double.NaN;
@@ -68,8 +71,6 @@ public final class AircraftState {
     public boolean autoTrimOverlayManualTrimChanged;
     public double autoTrimOverlayManualTrimDelta;
     public boolean autoTrimAdjusting;
-    public boolean autoTrimFirstNoticePending;
-    public long autoTrimFirstNoticeTick = Long.MIN_VALUE;
     public AutoTrimController.State lastAutoTrimStatusState = AutoTrimController.State.OFF;
     public String lastAutoTrimStatusReason = "OFF";
     public boolean lastAutoTrimStatusAdjusting;
@@ -82,6 +83,8 @@ public final class AircraftState {
         plan = null;
         roadBody = null;
         roadDrive = RoadVehiclePhysics.DriveSnapshot.ZERO;
+        roadWeatherForceWorld = Vec3d.ZERO;
+        roadWindTraction.reset();
         roadPropulsion = List.of();
         roadPropulsionSamples = List.of();
         roadActuatorGameTime = Long.MIN_VALUE;
@@ -119,6 +122,7 @@ public final class AircraftState {
         autoTrimOverlayPassActive = false;
         autoTrimOverlayDefinition = null;
         autoTrimOverlayDefinitionHasModifier = false;
+        autoTrimAuthoredStepPerTick = Double.NaN;
         autoTrimOverlayPartCount = -1;
         autoTrimOverlayPartsHaveRotor = false;
         autoTrimOverlayExpectedEffective = Double.NaN;
@@ -129,8 +133,6 @@ public final class AircraftState {
         autoTrimOverlayManualTrimChanged = false;
         autoTrimOverlayManualTrimDelta = 0.0;
         autoTrimAdjusting = false;
-        autoTrimFirstNoticePending = false;
-        autoTrimFirstNoticeTick = Long.MIN_VALUE;
         lastAutoTrimStatusState = AutoTrimController.State.OFF;
         lastAutoTrimStatusReason = "OFF";
         lastAutoTrimStatusAdjusting = false;

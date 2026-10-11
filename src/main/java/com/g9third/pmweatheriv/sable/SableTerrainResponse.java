@@ -24,6 +24,11 @@ final class SableTerrainResponse {
     private final SableVehicleBody body;
     SableTerrainResponse(SableVehicleBody body) { this.body = body; }
 
+    private static boolean requiresRigidManifold(Resolution material) {
+        return material == null || com.g9third.pmweatheriv.physics.BodyTerrainImpactPolicy.requiresRigidManifold(
+            material.accepted(), material.terrainOpened(), material.residualInwardSpeedMps());
+    }
+
     final Vector3d substepStartPositionWorld = new Vector3d();
     final Quaterniond substepStartOrientationWorld = new Quaterniond();
     boolean hasSubstepStartPose;
@@ -42,7 +47,8 @@ final class SableTerrainResponse {
         double inwardPointSpeedMetersPerSecond,
         double normalImpulseNewtonSeconds,
         float preImpactBlockHardness,
-        Resolution trueImpactResolution
+        Resolution trueImpactResolution,
+        boolean terrainDamageEligible
     ) {
         if (impact == null || impact.block() == null
             || !Double.isFinite(preImpactVehicleSpeedMetersPerSecond)
@@ -68,7 +74,8 @@ final class SableTerrainResponse {
                         impact.worldPoint() == null ? null : new Vector3d(impact.worldPoint()),
                         impact.worldNormal() == null ? null : new Vector3d(impact.worldNormal()),
                         impact.projectedAreaSquareMeters(),
-                        preSpeed, inward, impulse, preImpactBlockHardness, trueImpactResolution
+                        preSpeed, inward, impulse, preImpactBlockHardness, trueImpactResolution,
+                        terrainDamageEligible
                     ));
                 }
                 return;
@@ -82,7 +89,8 @@ final class SableTerrainResponse {
             impact.worldPoint() == null ? null : new Vector3d(impact.worldPoint()),
             impact.worldNormal() == null ? null : new Vector3d(impact.worldNormal()),
             impact.projectedAreaSquareMeters(),
-            preSpeed, inward, impulse, preImpactBlockHardness, trueImpactResolution
+            preSpeed, inward, impulse, preImpactBlockHardness, trueImpactResolution,
+            terrainDamageEligible
         ));
     }
 
@@ -252,19 +260,38 @@ final class SableTerrainResponse {
                 break;
             }
 
-            TerrainVelocityResolution rigidImpactResolution = resolveTerrainImpactVelocity(
-                workingPostGravityLinear,
-                workingAngular,
-                startPosition,
-                startOrientation,
-                impact
-            );
+            // The swept point belongs to the time-of-impact pose, not the
+            // earlier substep origin. Mixing them creates a false torque arm at
+            // high speed and can convert a nose strike into excessive rotation.
+            Vector3d impactPosition = new Vector3d(recovery.resolvedPosition());
+            Quaterniond impactOrientation = new Quaterniond(recovery.resolvedOrientation());
+            // Material work must use the impulse assigned to this station by
+            // the complete manifold. A solo stop can charge a contact that the
+            // coupled solve releases, repeatedly destroying supporting terrain.
+            RigidManifoldResolution rigidManifold = solveRigidContactManifold(
+                workingPostGravityLinear, workingAngular, impactPosition, impactOrientation,
+                impact, terrainQuery.rigidContactsAtPose(impactPosition, impactOrientation), 0.0);
+            int materialStation = materialStation(rigidManifold);
+            if (materialStation != 0) {
+                // A simultaneous nose/side strike can carry nearly all the
+                // load while the first swept station is a released support.
+                // Evaluate the loaded station's terrain before committing its
+                // rigid impulse; otherwise soft terrain becomes a launching ramp.
+                impact = rigidManifold.contacts().get(materialStation);
+                rigidManifold = solveRigidContactManifold(workingPostGravityLinear,
+                    workingAngular, impactPosition, impactOrientation, impact,
+                    rigidManifold.contacts(), 0.0);
+            }
+            TerrainVelocityResolution rigidImpactResolution = rigidManifold.primary();
 
             float preImpactBlockHardness = body.vehicle.world.getBlockHardness(impact.block());
             Resolution trueImpactResolution = null;
             double targetResidualInwardSpeedMps = 0.0;
             double maxMaterialTravelMeters = 0.0;
-            if (rigidImpactResolution.inwardPointSpeedBeforeMps() > 0.0
+            boolean terrainDamageEligible = body.classifyTerrainImpact(impact.worldNormal(),
+                rigidImpactResolution.inwardPointSpeedBeforeMps(),
+                rigidImpactResolution.normalImpulseNewtonSeconds()).damageEligible();
+            if (terrainDamageEligible && rigidImpactResolution.inwardPointSpeedBeforeMps() > 0.0
                 && rigidImpactResolution.normalImpulseNewtonSeconds() > 0.0
                 && body.terrainDamageAllowedForCurrentCrashEpisode()
                 && PMWeatherIVConfig.get().enableBlockBreaking()
@@ -284,7 +311,7 @@ final class SableTerrainResponse {
                     impact.projectedAreaSquareMeters(),
                     rigidImpactResolution.normalImpulseNewtonSeconds(),
                     rigidImpactResolution.inwardPointSpeedBeforeMps(),
-                    maxMaterialTravelMeters
+                    maxMaterialTravelMeters, body.vehicle.uniqueUUID
                 );
                 if (trueImpactResolution != null && trueImpactResolution.accepted()) {
                     targetResidualInwardSpeedMps = Math.max(0.0,
@@ -292,35 +319,32 @@ final class SableTerrainResponse {
                 }
             }
 
-            TerrainVelocityResolution impactResolution =
-                trueImpactResolution != null && trueImpactResolution.accepted()
-                    ? resolveTerrainImpactVelocity(
-                        workingPostGravityLinear,
-                        workingAngular,
-                        startPosition,
-                        startOrientation,
-                        impact, targetResidualInwardSpeedMps
-                    )
-                    : rigidImpactResolution;
-            impactResolution = applyTerrainContactFriction(impactResolution,
-                startPosition, startOrientation, impact);
-
-            boolean materialAccepted = trueImpactResolution != null && trueImpactResolution.accepted();
-            if (!materialAccepted) {
-                List<SableCompoundCollider.TerrainBoundaryImpact> contacts =
-                    terrainQuery.rigidContactsAtPose(startPosition, startOrientation);
-                contacts.addAll(terrainQuery.rigidContactsAtPose(
-                    recovery.resolvedPosition(), recovery.resolvedOrientation()));
-                impactResolution = resolveRigidContactManifold(workingPostGravityLinear,
-                    workingAngular, startPosition, startOrientation, impact, contacts,
-                    preImpactVehicleSpeedMps, safeFraction);
+            RigidManifoldResolution resolvedManifold = rigidManifold;
+            if (!requiresRigidManifold(trueImpactResolution)) {
+                // Charge only this station's paid material response. When its
+                // terrain opens, re-sweep the remaining compound in the next
+                // bounded pass before committing any other rigid stop. Applying
+                // those stops now would bypass their own material calculation.
+                terrainQuery.invalidateAfterMaterialFracture();
+                if (trueImpactResolution.terrainOpened()) {
+                    targetResidualInwardSpeedMps = materialResidualAtStation(
+                        workingPostGravityLinear, workingAngular, impactPosition,
+                        impactOrientation, impact, trueImpactResolution);
+                }
+                resolvedManifold = solveRigidContactManifold(workingPostGravityLinear,
+                    workingAngular, impactPosition, impactOrientation, impact,
+                    trueImpactResolution.terrainOpened() ? List.of()
+                        : terrainQuery.rigidContactsAtPose(impactPosition, impactOrientation),
+                    targetResidualInwardSpeedMps);
             }
+            TerrainVelocityResolution impactResolution = resolvedManifold.primary();
+            recordRigidManifoldImpacts(resolvedManifold, preImpactVehicleSpeedMps, safeFraction);
 
             queueSweptTerrainImpact(
                 impact, preImpactVehicleSpeedMps,
                 impactResolution.inwardPointSpeedBeforeMps(),
                 impactResolution.normalImpulseNewtonSeconds(),
-                preImpactBlockHardness, trueImpactResolution
+                preImpactBlockHardness, trueImpactResolution, terrainDamageEligible
             );
 
             boolean momentumChangedThisPass = workingPostGravityLinear.distanceSquared(
@@ -538,11 +562,49 @@ final class SableTerrainResponse {
         );
     }
 
-    private TerrainVelocityResolution resolveRigidContactManifold(
+    private record RigidManifoldResolution(TerrainVelocityResolution primary,
+        List<SableCompoundCollider.TerrainBoundaryImpact> contacts,
+        double[] inwardBefore, double[] impulses, Vector3d beforeLinear) {}
+
+    /** Material work follows the contact carrying the coupled load, not list order. */
+    private int materialStation(RigidManifoldResolution manifold) {
+        if (!body.terrainDamageAllowedForCurrentCrashEpisode()
+            || !PMWeatherIVConfig.get().enableBlockBreaking()
+            || !ConfigSystem.settings.damage.vehicleBlockBreaking.value) return 0;
+        int chosen = 0;
+        double largestWork = 0;
+        for (int i = 0; i < manifold.contacts().size(); ++i) {
+            double inward = manifold.inwardBefore()[i], impulse = manifold.impulses()[i];
+            double work = inward * impulse;
+            if (!(work > largestWork) || !Double.isFinite(work)) continue;
+            var contact = manifold.contacts().get(i);
+            if (!body.classifyTerrainImpact(contact.worldNormal(), inward, impulse).damageEligible())
+                continue;
+            chosen = i;
+            largestWork = work;
+        }
+        return chosen;
+    }
+
+    private double materialResidualAtStation(Vector3dc linear, Vector3dc angular,
+        Vector3dc position, Quaterniond orientation,
+        SableCompoundCollider.TerrainBoundaryImpact contact, Resolution material) {
+        var solo = resolveTerrainImpactVelocity(linear, angular, position, orientation, contact);
+        double inward = solo.inwardPointSpeedBeforeMps();
+        double available = 0.5 * solo.normalImpulseNewtonSeconds() * inward;
+        if (!(available > 0.0) || !Double.isFinite(available)) return 0.0;
+        // Coupled contact work selected the terrain budget. After fracture only
+        // this station applies momentum, so its effective mass must convert the
+        // paid joules to residual speed. Reusing the coupled residual would
+        // remove more or less energy than the material actually absorbed.
+        double paidFraction = Math.max(0.0, Math.min(1.0, material.absorbedEnergyJ() / available));
+        return inward * Math.sqrt(1.0 - paidFraction);
+    }
+
+    private RigidManifoldResolution solveRigidContactManifold(
         Vector3dc linear, Vector3dc angular, Vector3dc position, Quaterniond orientation,
         SableCompoundCollider.TerrainBoundaryImpact primary,
-        List<SableCompoundCollider.TerrainBoundaryImpact> candidates,
-        double preSpeed, double safeFraction
+        List<SableCompoundCollider.TerrainBoundaryImpact> candidates, double primaryResidualInwardMps
     ) {
         List<SableCompoundCollider.TerrainBoundaryImpact> contacts = new ArrayList<>();
         contacts.add(primary);
@@ -561,8 +623,11 @@ final class SableTerrainResponse {
         double mass = Math.max(1.0, body.vehicle.currentMass);
         Vec3d inertia = body.desiredInertia.scale(mass / Math.max(1.0, body.mass));
         List<RigidContactSolver.Contact> constraints = new ArrayList<>(contacts.size());
-        for (var contact : contacts) constraints.add(new RigidContactSolver.Contact(
-            contact.worldPoint(), contact.worldNormal(), 0.0));
+        for (int i = 0; i < contacts.size(); ++i) {
+            var contact = contacts.get(i);
+            constraints.add(new RigidContactSolver.Contact(contact.worldPoint(),
+                contact.worldNormal(), i == 0 ? primaryResidualInwardMps : 0.0));
+        }
         var normal = RigidContactSolver.solve(linear, angular, position, orientation,
             inertia, mass, constraints);
         Vector3d v = new Vector3d(normal.linearWorld()), w = new Vector3d(normal.angularWorld());
@@ -585,25 +650,39 @@ final class SableTerrainResponse {
         // Re-project the coupled normals without applying friction twice.
         var finalNormal = RigidContactSolver.solve(v, w, position, orientation,
             inertia, mass, constraints);
-        for (int i = 1; i < contacts.size(); ++i) {
-            var contact = contacts.get(i);
-            double impulse = normal.normalImpulses()[i] + finalNormal.normalImpulses()[i];
-            if (impulse <= 1.0E-8) continue;
-            queueSweptTerrainImpact(contact, preSpeed, normal.inwardBefore()[i], impulse,
-                body.vehicle.world.getBlockHardness(contact.block()), null);
-            PMIVObserver.captureTerrainCcd(body, safeFraction, preSpeed, contact,
-                contact.worldNormal(), normal.inwardBefore()[i], impulse, 0.0, 0.0,
-                tangentialSpeed(linear, contact.worldNormal()),
-                tangentialSpeed(finalNormal.linearWorld(), contact.worldNormal()),
-                contact.projectedAreaSquareMeters(), false, "RIGID_COMPOUND_SUPPORT",
-                0.0, 0.0, 0.0, 0.0, 0);
+        double[] impulses = new double[contacts.size()];
+        for (int i = 0; i < contacts.size(); ++i) {
+            impulses[i] = normal.normalImpulses()[i] + finalNormal.normalImpulses()[i];
         }
-        return new TerrainVelocityResolution(finalNormal.linearWorld(), finalNormal.angularWorld(),
-            primary.worldNormal(), normal.inwardBefore()[0],
-            normal.normalImpulses()[0] + finalNormal.normalImpulses()[0],
+        TerrainVelocityResolution response = new TerrainVelocityResolution(
+            finalNormal.linearWorld(), finalNormal.angularWorld(), primary.worldNormal(),
+            normal.inwardBefore()[0], impulses[0],
             tangentialSpeed(linear, primary.worldNormal()),
             tangentialSpeed(finalNormal.linearWorld(), primary.worldNormal()),
             primaryTangentImpulse, primaryCoefficient);
+        return new RigidManifoldResolution(response, contacts, normal.inwardBefore(),
+            impulses, new Vector3d(linear));
+    }
+
+    private void recordRigidManifoldImpacts(RigidManifoldResolution manifold,
+        double preSpeed, double safeFraction) {
+        for (int i = 1; i < manifold.contacts().size(); ++i) {
+            var contact = manifold.contacts().get(i);
+            double impulse = manifold.impulses()[i];
+            // Observe even a released/quiet station so support cannot expire
+            // and then be misclassified as a new strike on a later solver tick.
+            boolean eligible = body.classifyTerrainImpact(contact.worldNormal(),
+                manifold.inwardBefore()[i], impulse).damageEligible();
+            if (impulse <= 1.0E-8) continue;
+            queueSweptTerrainImpact(contact, preSpeed, manifold.inwardBefore()[i], impulse,
+                body.vehicle.world.getBlockHardness(contact.block()), null, eligible);
+            PMIVObserver.captureTerrainCcd(body, safeFraction, preSpeed, contact,
+                contact.worldNormal(), manifold.inwardBefore()[i], impulse, 0.0, 0.0,
+                tangentialSpeed(manifold.beforeLinear(), contact.worldNormal()),
+                tangentialSpeed(manifold.primary().linearVelocityWorld(), contact.worldNormal()),
+                contact.projectedAreaSquareMeters(), false, "RIGID_COMPOUND_SUPPORT",
+                0.0, 0.0, 0.0, 0.0, 0);
+        }
     }
 
     private TerrainVelocityResolution applyTerrainContactFriction(
@@ -819,6 +898,7 @@ final class SableTerrainResponse {
         // concrete swept BODY/block hit is known. This preserves runway/wall
         // tangential momentum and couples the impact to rotation through r x J.
         Resolution postStepTrueImpactResolution = null;
+        boolean postStepTerrainDamageEligible = false;
         double postStepTargetResidualInwardSpeedMps = 0.0;
         double postStepMaterialTravelMeters = 0.0;
         boolean completedPoseClearAfterMaterial = false;
@@ -827,13 +907,24 @@ final class SableTerrainResponse {
             ? body.vehicle.world.getBlockHardness(sweptImpact.block()) : -1.0F;
 
         if (sweptImpact != null && sweptImpact.worldNormal() != null) {
-            TerrainVelocityResolution rigidImpactResolution = resolveTerrainImpactVelocity(
-                correctedLinearVelocity,
-                correctedAngularVelocityWorld,
-                resolvedPosition,
-                resolvedOrientation,
-                sweptImpact
-            );
+            var rigidQuery = body.compoundCollider.newTerrainQuerySession(body.level);
+            RigidManifoldResolution rigidManifold = solveRigidContactManifold(
+                correctedLinearVelocity, correctedAngularVelocityWorld,
+                resolvedPosition, resolvedOrientation, sweptImpact,
+                rigidQuery.rigidContactsAtPose(resolvedPosition, resolvedOrientation), 0.0);
+            int materialStation = materialStation(rigidManifold);
+            if (materialStation != 0) {
+                sweptImpact = rigidManifold.contacts().get(materialStation);
+                sweptPreImpactHardness = body.vehicle.world.getBlockHardness(sweptImpact.block());
+                rigidManifold = solveRigidContactManifold(correctedLinearVelocity,
+                    correctedAngularVelocityWorld, resolvedPosition, resolvedOrientation,
+                    sweptImpact, rigidManifold.contacts(), 0.0);
+            }
+            TerrainVelocityResolution rigidImpactResolution = rigidManifold.primary();
+
+            postStepTerrainDamageEligible = body.classifyTerrainImpact(sweptImpact.worldNormal(),
+                rigidImpactResolution.inwardPointSpeedBeforeMps(),
+                rigidImpactResolution.normalImpulseNewtonSeconds()).damageEligible();
 
             // The post-step terrain-boundary pass is a fail-safe for a contact Rapier
             // integrated before PMIV's pre-step CCD could commit it. 0.11.7 applied the
@@ -841,7 +932,7 @@ final class SableTerrainResponse {
             // shown that the terrain should yield. That produced a second, unbudgeted
             // impulse (30-65 kN*s in the September 16 crash traces). Run the exact same
             // integrated material authority here before applying any recovery impulse.
-            if (rigidImpactResolution.inwardPointSpeedBeforeMps() > 0.0
+            if (postStepTerrainDamageEligible && rigidImpactResolution.inwardPointSpeedBeforeMps() > 0.0
                 && rigidImpactResolution.normalImpulseNewtonSeconds() > 0.0
                 && body.terrainDamageAllowedForCurrentCrashEpisode()
                 && PMWeatherIVConfig.get().enableBlockBreaking()
@@ -868,7 +959,7 @@ final class SableTerrainResponse {
                     sweptImpact.projectedAreaSquareMeters(),
                     rigidImpactResolution.normalImpulseNewtonSeconds(),
                     rigidImpactResolution.inwardPointSpeedBeforeMps(),
-                    postStepMaterialTravelMeters
+                    postStepMaterialTravelMeters, body.vehicle.uniqueUUID
                 );
                 if (postStepTrueImpactResolution != null
                     && postStepTrueImpactResolution.accepted()) {
@@ -878,28 +969,24 @@ final class SableTerrainResponse {
                 }
             }
 
-            TerrainVelocityResolution impactResolution =
-                postStepTrueImpactResolution != null && postStepTrueImpactResolution.accepted()
-                    ? resolveTerrainImpactVelocity(
-                        correctedLinearVelocity,
-                        correctedAngularVelocityWorld,
-                        resolvedPosition,
-                        resolvedOrientation,
-                        sweptImpact,
-                        postStepTargetResidualInwardSpeedMps
-                    )
-                    : rigidImpactResolution;
-            impactResolution = applyTerrainContactFriction(impactResolution,
-                resolvedPosition, resolvedOrientation, sweptImpact);
-
-            if (postStepTrueImpactResolution == null || !postStepTrueImpactResolution.accepted()) {
-                var query = body.compoundCollider.newTerrainQuerySession(body.level);
-                impactResolution = resolveRigidContactManifold(correctedLinearVelocity,
+            RigidManifoldResolution resolvedManifold = rigidManifold;
+            if (!requiresRigidManifold(postStepTrueImpactResolution)) {
+                rigidQuery.invalidateAfterMaterialFracture();
+                if (postStepTrueImpactResolution.terrainOpened()) {
+                    postStepTargetResidualInwardSpeedMps = materialResidualAtStation(
+                        correctedLinearVelocity, correctedAngularVelocityWorld,
+                        resolvedPosition, resolvedOrientation, sweptImpact,
+                        postStepTrueImpactResolution);
+                }
+                resolvedManifold = solveRigidContactManifold(correctedLinearVelocity,
                     correctedAngularVelocityWorld, resolvedPosition, resolvedOrientation,
-                    sweptImpact, query.rigidContactsAtPose(resolvedPosition, resolvedOrientation),
-                    preCorrectionVehicleSpeedMps, resolvedPathFraction);
+                    sweptImpact, postStepTrueImpactResolution.terrainOpened() ? List.of()
+                        : rigidQuery.rigidContactsAtPose(resolvedPosition, resolvedOrientation),
+                    postStepTargetResidualInwardSpeedMps);
             }
-
+            TerrainVelocityResolution impactResolution = resolvedManifold.primary();
+            recordRigidManifoldImpacts(resolvedManifold,
+                preCorrectionVehicleSpeedMps, resolvedPathFraction);
 
             removedLinearMps = Math.max(
                 0.0, correctedLinearVelocity.length()
@@ -975,7 +1062,8 @@ final class SableTerrainResponse {
 
         queueSweptTerrainImpact(
             sweptImpact, preCorrectionVehicleSpeedMps, sweptInwardPointSpeedBeforeMps,
-            sweptNormalImpulseNs, sweptPreImpactHardness, postStepTrueImpactResolution
+            sweptNormalImpulseNs, sweptPreImpactHardness, postStepTrueImpactResolution,
+            postStepTerrainDamageEligible
         );
 
         body.placeBodyWithVelocity(

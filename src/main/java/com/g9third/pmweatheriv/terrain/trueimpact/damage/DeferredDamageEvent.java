@@ -7,6 +7,8 @@
  */
 package com.g9third.pmweatheriv.terrain.trueimpact.damage;
 
+import java.util.UUID;
+
 /** One aircraft/world contact queued for end-of-tick terrain processing.
  * Energy is 0.5 * normal impulse * pre-impact inward point speed, in joules.
  * Direction points into the terrain; NaN selects isotropic confinement.
@@ -19,11 +21,22 @@ public record DeferredDamageEvent(
     MaterialThresholdProfile.MaterialClass materialClass,
     double kImpact,
     double threshold,
-    double impactDirX, double impactDirY, double impactDirZ
+    double impactDirX, double impactDirY, double impactDirZ,
+    UUID originVehicleUuid
 ) {
+    /** Preserves the original event constructor for non-vehicle/external callers. */
+    public DeferredDamageEvent(long serverTick, String levelKey, String victimBlock,
+            int posX, int posY, int posZ,
+            MaterialThresholdProfile.MaterialClass materialClass,
+            double kImpact, double threshold,
+            double impactDirX, double impactDirY, double impactDirZ) {
+        this(serverTick, levelKey, victimBlock, posX, posY, posZ, materialClass,
+            kImpact, threshold, impactDirX, impactDirY, impactDirZ, null);
+    }
+
     public DeferredDamageEvent withThreshold(double value) {
         return new DeferredDamageEvent(serverTick, levelKey, victimBlock,
             posX, posY, posZ, materialClass, kImpact, value,
-            impactDirX, impactDirY, impactDirZ);
+            impactDirX, impactDirY, impactDirZ, originVehicleUuid);
     }
 }

@@ -10,8 +10,9 @@ import java.util.UUID;
  * trim value; it never predicts or mutates a physics solve.
  */
 public final class AutoTrimController {
-    /** Matches IV's native fixed-wing autopilot trim increment of 0.1 degrees per tick. */
+    /** Matches IV's native manual trim increment; slower authored controls take precedence. */
     public static final double MAX_STEP_PER_TICK = 0.1;
+    private double maximumStepPerTick = MAX_STEP_PER_TICK;
     private static final double PROBE_DISTANCE = 0.4;
     private static final int BASELINE_TICKS = 12;
     private static final int PROBE_HOLD_TICKS = 30;
@@ -84,8 +85,6 @@ public final class AutoTrimController {
     private double expectedTrim = Double.NaN;
     private double trimSlopePerPressure;
     private boolean hasTrimSlope;
-    private double learnedSpeed;
-    private double learnedAoA;
     private double learnedFlaps;
     private double learnedMass;
     private double learnedInertia;
@@ -132,6 +131,11 @@ public final class AutoTrimController {
     public String reason() { return reason; }
     public double expectedTrim() { return expectedTrim; }
     public boolean adjusting() { return adjusting; }
+    public double maximumStepPerTick() { return maximumStepPerTick; }
+    public void setMaximumStepPerTick(double step) {
+        maximumStepPerTick = Double.isFinite(step) && step > 0.0
+            ? Math.min(MAX_STEP_PER_TICK, step) : MAX_STEP_PER_TICK;
+    }
 
     private boolean adjusting;
 
@@ -207,6 +211,7 @@ public final class AutoTrimController {
             && finite(expectedTrim) && Math.abs(currentTrim - expectedTrim) > 0.025) {
             // A player or another native system moved elevator trim. Never chase it.
             hasTrimSlope = false;
+            consistentMeasurements = 0;
             clearAttempt();
             probeTrimOwned = false;
             restorePending = false;
@@ -254,7 +259,7 @@ public final class AutoTrimController {
             return output(currentTrim);
         }
         if (state == State.PAUSED && "PILOT_INPUT".equals(reason)) {
-            if (++manualNeutralTicks < 12) return output(currentTrim);
+            if (++manualNeutralTicks < 4) return output(currentTrim);
         }
 
         String ineligible = in.terrainContact() ? "CONTACT"
@@ -303,8 +308,8 @@ public final class AutoTrimController {
             stableTicks = 0;
             manualNeutralTicks = 0;
             if (learningInterrupted) {
-                startFreshLearning(currentTrim, in.tick(), "LEARNING");
-            } else if (hasTrimSlope) {
+                resumeLearning(in, currentTrim);
+            } else if (hasTrimSlope && learnedResponseMatches(in)) {
                 state = State.ON;
                 reason = "ON";
             } else {
@@ -322,11 +327,13 @@ public final class AutoTrimController {
 
         state = State.ON;
         reason = "ON";
+        // Request a larger response for sustained hands-off descent/climb. Native
+        // trim slew still bounds every write, including the return toward equilibrium.
         double gammaError = Math.toRadians(TARGET_FLIGHT_PATH_DEGREES - in.flightPathDegrees());
-        double desiredPitchRate = clamp(gammaError * 0.35, -Math.toRadians(2.0), Math.toRadians(2.0));
+        double desiredPitchRate = clamp(gammaError * 0.5, -Math.toRadians(4.0), Math.toRadians(4.0));
         double desiredAngularAcceleration = clamp(
-            (desiredPitchRate - in.pitchRateRadiansPerSecond()) * 0.8,
-            -Math.toRadians(2.5), Math.toRadians(2.5)
+            (desiredPitchRate - in.pitchRateRadiansPerSecond()),
+            -Math.toRadians(5.0), Math.toRadians(5.0)
         );
         double denominator = trimSlopePerPressure * in.dynamicPressure();
         if (!finite(denominator) || Math.abs(denominator) < 1.0E-7) {
@@ -355,7 +362,7 @@ public final class AutoTrimController {
         }
         state = State.ON;
         reason = "ON";
-        double delta = clamp(desiredTrim - currentTrim, -MAX_STEP_PER_TICK, MAX_STEP_PER_TICK);
+        double delta = clamp(desiredTrim - currentTrim, -maximumStepPerTick, maximumStepPerTick);
         return output(clamp(currentTrim + delta, minimumTrim, maximumTrim));
     }
 
@@ -436,6 +443,9 @@ public final class AutoTrimController {
         ++learningAttempts;
         lastFitDiagnostic = fit.diagnostic() + " attempt=" + learningAttempts;
         if (fit.accepted()) {
+            if (consistentMeasurements > 0 && !learnedResponseMatches(in)) {
+                consistentMeasurements = 0;
+            }
             double slope = fit.slope();
             boolean consistent = consistentMeasurements == 0
                 || Math.signum(slope) == Math.signum(candidateSlope)
@@ -453,18 +463,12 @@ public final class AutoTrimController {
                 candidateLagTicks = fit.lagTicks();
                 consistentMeasurements = 1;
             }
-            if (consistentMeasurements >= 2) {
+            rememberResponseConfiguration(in);
+            boolean decisiveFit = fit.samples() >= 50 && fit.rSquared() >= 0.995
+                && Math.abs(fit.slope()) > 100.0 * fit.slopeStandardError();
+            if (consistentMeasurements >= 2 || decisiveFit) {
                 trimSlopePerPressure = candidateSlope;
                 hasTrimSlope = true;
-                learnedSpeed = in.trueAirspeed();
-                learnedAoA = in.angleOfAttackDegrees();
-                learnedFlaps = in.flapAngle();
-                learnedMass = in.mass();
-                learnedInertia = in.pitchInertia();
-                learnedMaximumLiftCoefficient = in.maximumLiftCoefficient();
-                learnedDamageSignature = in.damageSignature();
-                nextDamageSignatureCheck = in.tick() + 20;
-                configurationDriftTicks = 0;
                 retryBudgetExhausted = false;
                 learningInterrupted = false;
                 attemptSamples = null;
@@ -481,6 +485,43 @@ public final class AutoTrimController {
         }
     }
 
+    /** Reuse only completed fits; interrupted probe samples never cross pilot input. */
+    private void resumeLearning(Input in, double trim) {
+        if (consistentMeasurements == 0 || !learnedResponseMatches(in)) {
+            startFreshLearning(trim, in.tick(), "LEARNING");
+            return;
+        }
+        learningInterrupted = false;
+        restorePending = false;
+        probeTrimOwned = false;
+        restoreTargetTrim = Double.NaN;
+        stableTicks = 0;
+        manualNeutralTicks = 0;
+        beginAttempt(trim, in.tick());
+        state = State.LEARNING;
+        reason = "LEARNING";
+    }
+
+    private void rememberResponseConfiguration(Input in) {
+        learnedFlaps = in.flapAngle();
+        learnedMass = in.mass();
+        learnedInertia = in.pitchInertia();
+        learnedMaximumLiftCoefficient = in.maximumLiftCoefficient();
+        learnedDamageSignature = in.damageSignature();
+        nextDamageSignatureCheck = in.tick() + 20;
+        configurationDriftTicks = 0;
+    }
+
+    // Pressure is evaluated live. Routine speed/AoA changes and pilot maneuvers
+    // do not erase a pressure-normalized derivative; stall/high-AoA gates still pause writes.
+    private boolean learnedResponseMatches(Input in) {
+        return in.damageSignature() == learnedDamageSignature
+            && Math.abs(in.flapAngle() - learnedFlaps) <= 0.5
+            && relativeChange(in.mass(), learnedMass) <= 0.05
+            && relativeChange(in.pitchInertia(), learnedInertia) <= 0.05
+            && relativeChange(in.maximumLiftCoefficient(), learnedMaximumLiftCoefficient) <= 0.05;
+    }
+
     private boolean configurationChanged(Input in) {
         if (hasTrimSlope && in.tick() >= nextDamageSignatureCheck) {
             nextDamageSignatureCheck = in.tick() + 20;
@@ -490,9 +531,7 @@ public final class AutoTrimController {
         boolean drift = Math.abs(in.flapAngle() - learnedFlaps) > 2.0
             || relativeChange(in.mass(), learnedMass) > 0.10
             || relativeChange(in.pitchInertia(), learnedInertia) > 0.10
-            || relativeChange(in.maximumLiftCoefficient(), learnedMaximumLiftCoefficient) > 0.05
-            || relativeChange(in.trueAirspeed(), learnedSpeed) > 0.45
-            || Math.abs(in.angleOfAttackDegrees() - learnedAoA) > 7.0;
+            || relativeChange(in.maximumLiftCoefficient(), learnedMaximumLiftCoefficient) > 0.05;
         configurationDriftTicks = drift ? configurationDriftTicks + 1 : 0;
         if (configurationDriftTicks >= 8) return true;
         return false;
@@ -602,9 +641,17 @@ public final class AutoTrimController {
     }
 
     private void pause(String why) {
+        // Pilot input also cancels cleanup queued by an earlier stall/contact pause.
+        // Once the pilot takes over, the current setting becomes the held baseline.
+        boolean pilotInput = "PILOT_INPUT".equals(why);
+        if (pilotInput) {
+            restorePending = false;
+            probeTrimOwned = false;
+            restoreTargetTrim = Double.NaN;
+        }
         if (learningPhase != null) {
             learningInterrupted = true;
-            if (probeTrimOwned && finite(learningBaseTrim)) {
+            if (!pilotInput && probeTrimOwned && finite(learningBaseTrim)) {
                 restoreTargetTrim = learningBaseTrim;
                 restorePending = true;
             }
@@ -624,7 +671,7 @@ public final class AutoTrimController {
     private Output advanceRestore(double currentTrim, boolean turnOff, Input in) {
         if (!restorePending || !finite(restoreTargetTrim)) {
             if (turnOff) disable("OFF");
-            else if (learningInterrupted) startFreshLearning(currentTrim, in.tick(), "LEARNING");
+            else if (learningInterrupted) resumeLearning(in, currentTrim);
             return output(currentTrim);
         }
         double target = clamp(restoreTargetTrim, minimumTrim(in), maximumTrim(in));
@@ -635,7 +682,7 @@ public final class AutoTrimController {
             if (turnOff) {
                 disable("OFF");
             } else {
-                startFreshLearning(currentTrim, in.tick(), "LEARNING");
+                resumeLearning(in, currentTrim);
             }
             return output(currentTrim);
         }
@@ -651,8 +698,8 @@ public final class AutoTrimController {
         return new Output(trim, state, reason, enabled, adjusting);
     }
 
-    private static double stepToward(double from, double to) {
-        return from + clamp(to - from, -MAX_STEP_PER_TICK, MAX_STEP_PER_TICK);
+    private double stepToward(double from, double to) {
+        return from + clamp(to - from, -maximumStepPerTick, maximumStepPerTick);
     }
 
     private static double relativeChange(double value, double reference) {

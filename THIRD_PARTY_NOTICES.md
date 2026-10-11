@@ -1,6 +1,6 @@
 # Third-party notices
 
-Notice updated 2026-10-09.
+Notice updated 2026-10-11.
 
 ## True Impact
 
@@ -70,6 +70,35 @@ for integration testing; it does not add weather-test code to PMWeather itself o
 redistribute the PMWeather JAR. This describes the integration's design, not an
 assertion of permission to incorporate third-party proprietary implementation code.
 
+## Other runtime integrations
+
+- **Sable 2.0.5**, RyanHCode and contributors: PolyForm Shield License 1.0.0.
+  https://github.com/ryanhcode/sable/blob/main/LICENSE.md
+  This includes a noncompete condition and is not an MIT license. PMIV requires
+  the independently installed Sable mod and uses its native physics APIs. PMIV
+  does not include Sable's classes, native libraries, assets or player-contact
+  implementation, and is not a replacement distribution of Sable.
+- **Sable Companion 1.6.0**, RyanHCode and contributors: MIT, as identified in
+  its separately supplied JAR. Its classes and JAR are not included in PMIV.
+- **Create: Aeronautics, Create: Simulated and Offroad**, The Simulated Team /
+  The Creators of Aeronautics: MIT for code, All Rights Reserved for the
+  designated assets directories. See
+  https://github.com/Creators-of-Aeronautics/Simulated-Project/blob/main/LICENSE.md.
+  PMIV does not distribute these mods' code or assets. Standing-player contact
+  uses PMIV's own IV-oriented-box geometry with Minecraft's native movement;
+  it does not incorporate Sable's sublevel player-collision implementation.
+- **Immersive Vehicles**, don_bruce and contributors: Immersive Vehicles
+  General Public License, version 1 (13 January 2024).
+  https://github.com/DonBruce64/MinecraftTransportSimulator/blob/master/LICENCE.md
+  Its terms restrict public derivative distributions and redistribution of IV.
+  PMIV is a separate integration requiring the original IV JAR; it does not
+  bundle IV classes, a modified IV binary, or content-pack models and textures.
+
+PMIV's LGPL license applies to PMIV and the incorporated LGPL-covered True
+Impact portions. It does not relicense any dependency or grant permission to
+redistribute third-party mods. Integration references and API hooks are not a
+claim of authorship or ownership of those dependencies.
+
 ## Release source distribution
 
 For each public PMWeather-IV release, distribute the mod JAR and its matching public source
@@ -82,3 +111,10 @@ https://github.com/G9third/pmweather-iv/commit/e68701f037fa58537327f3ce08c1866cf
 It identifies the earlier source state. The 2026-10-09 audit-fix candidate is supplied with
 its own matching source archive and SHA-256 manifest. Preserve that matching archive with
 any distribution of this rebuilt binary; the version label alone does not identify it.
+
+## Build tooling
+
+The public source archive includes the Gradle wrapper, a build tool from the
+Gradle project under Apache License 2.0. The matching license text is retained
+in `gradle/wrapper/LICENSE`. The wrapper is not bundled in the mod JAR.
+https://www.apache.org/licenses/LICENSE-2.0

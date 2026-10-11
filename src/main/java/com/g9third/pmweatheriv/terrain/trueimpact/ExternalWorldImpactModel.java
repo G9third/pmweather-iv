@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * PMIV-integrated True Impact 0.5.8 material-response surface for aircraft/world contacts.
@@ -66,8 +67,19 @@ public final class ExternalWorldImpactModel {
             int terminalY,
             int terminalZ,
             double contactAreaM2,
-            String mode
-    ) {}
+            String mode,
+            double brokenTerrainHardness
+    ) {
+        /** Retains the existing constructor for callers without fracture accounting. */
+        public Resolution(boolean accepted, boolean penetrationAttempted, boolean terrainOpened,
+                double impactEnergyJ, double absorbedEnergyJ, double residualEnergyJ,
+                double residualInwardSpeedMps, int blocksBroken, int terminalX, int terminalY,
+                int terminalZ, double contactAreaM2, String mode) {
+            this(accepted, penetrationAttempted, terrainOpened, impactEnergyJ, absorbedEnergyJ,
+                residualEnergyJ, residualInwardSpeedMps, blocksBroken, terminalX, terminalY,
+                terminalZ, contactAreaM2, mode, 0.0);
+        }
+    }
 
     /** Canonical external-contact energy definition owned by True Impact. */
     public static double deriveImpactEnergyJ(double normalImpulseNs, double inwardPointSpeedMps) {
@@ -90,6 +102,19 @@ public final class ExternalWorldImpactModel {
             double normalImpulseNs,
             double inwardPointSpeedMps
     ) {
+        return enqueueExternalWorldImpact(level, blockX, blockY, blockZ,
+                normalX, normalY, normalZ, normalImpulseNs, inwardPointSpeedMps, null);
+    }
+
+    /** Origin-aware overload; null origins retain the external/non-PMIV path. */
+    public static double enqueueExternalWorldImpact(
+            ServerLevel level,
+            int blockX, int blockY, int blockZ,
+            double normalX, double normalY, double normalZ,
+            double normalImpulseNs,
+            double inwardPointSpeedMps,
+            UUID originVehicleUuid
+    ) {
         double energyJ = deriveImpactEnergyJ(normalImpulseNs, inwardPointSpeedMps);
         if (level == null || !(energyJ > IntegratedImpactSettings.GLOBAL_DETECTION_THRESHOLD_J)
                 || (!ImpactRuntimeConfig.APPLY_BLOCK_EFFECTS
@@ -103,7 +128,7 @@ public final class ExternalWorldImpactModel {
 
         double[] dir = normalized(-normalX, -normalY, -normalZ);
         queueDamage(level, pos, state, energyJ,
-                dir[0], dir[1], dir[2]);
+                dir[0], dir[1], dir[2], originVehicleUuid);
         return energyJ;
     }
 
@@ -126,6 +151,24 @@ public final class ExternalWorldImpactModel {
             double inwardPointSpeedMps,
             double maxTravelMeters
     ) {
+        return resolveExternalPenetration(level, seedBlockX, seedBlockY, seedBlockZ,
+                contactX, contactY, contactZ, normalX, normalY, normalZ,
+                projectedContactAreaM2, normalImpulseNs, inwardPointSpeedMps,
+                maxTravelMeters, null);
+    }
+
+    /** Origin-aware overload; all physical resolution behavior remains shared. */
+    public static Resolution resolveExternalPenetration(
+            ServerLevel level,
+            int seedBlockX, int seedBlockY, int seedBlockZ,
+            double contactX, double contactY, double contactZ,
+            double normalX, double normalY, double normalZ,
+            double projectedContactAreaM2,
+            double normalImpulseNs,
+            double inwardPointSpeedMps,
+            double maxTravelMeters,
+            UUID originVehicleUuid
+    ) {
         double energy0 = deriveImpactEnergyJ(normalImpulseNs, inwardPointSpeedMps);
         double area = finitePositive(projectedContactAreaM2) ? projectedContactAreaM2 : 1.0;
         if (level == null || !(energy0 > IntegratedImpactSettings.GLOBAL_DETECTION_THRESHOLD_J)
@@ -146,12 +189,11 @@ public final class ExternalWorldImpactModel {
                     / Math.max(EPS, inwardPointSpeedMps * inwardPointSpeedMps);
         }
 
-        boolean penetrationRegime = ImpactRuntimeConfig.APPLY_BLOCK_EFFECTS
-                && ImpactRuntimeConfig.ENABLE_BLOCK_BREAKING
-                && ImpactRuntimeConfig.ENABLE_PENETRATION
-                && energy0 >= ImpactRuntimeConfig.PENETRATION_TRIGGER_J
-                && inwardPointSpeedMps >= ImpactRuntimeConfig.PENETRATION_MIN_SPEED_MS
-                && finitePositive(maxTravelMeters);
+        boolean fractureRegime = surfaceFractureEligible(energy0, maxTravelMeters);
+        // Surface fracture can precede the rigid response even below the deep
+        // penetration speed gate. A low-speed strike may only open its first layer.
+        boolean penetrationRegime = fractureRegime
+                && inwardPointSpeedMps >= ImpactRuntimeConfig.PENETRATION_MIN_SPEED_MS;
 
         // The Sable sweep already identified the exact terrain voxel that produced
         // this contact. Use that voxel as the material-ray seed instead of deriving
@@ -159,12 +201,12 @@ public final class ExternalWorldImpactModel {
         // on a voxel edge/corner; re-flooring them was able to select the adjacent
         // air cell and falsely report a "rigid terminal" with zero absorbed energy.
         BlockPos firstPos = new BlockPos(seedBlockX, seedBlockY, seedBlockZ);
-        if (!penetrationRegime) {
+        if (!fractureRegime) {
             if (level.hasChunkAt(firstPos)) {
                 BlockState state = level.getBlockState(firstPos);
                 if (!state.isAir()) {
                     queueDamage(level, firstPos, state, energy0,
-                            dx, dy, dz);
+                            dx, dy, dz, originVehicleUuid);
                 }
             }
             return new Resolution(true, false, false, energy0, energy0, 0.0, 0.0,
@@ -179,6 +221,7 @@ public final class ExternalWorldImpactModel {
         double travelLimit = Math.max(EPS, maxTravelMeters);
         double traveled = 0.0;
         int broken = 0;
+        double brokenTerrainHardness = 0.0;
         int terminalX = Integer.MIN_VALUE;
         int terminalY = Integer.MIN_VALUE;
         int terminalZ = Integer.MIN_VALUE;
@@ -230,7 +273,7 @@ public final class ExternalWorldImpactModel {
                         || baseBreakJ >= INDESTRUCTIBLE_BREAK_J) {
                     terminalX = pos.getX(); terminalY = pos.getY(); terminalZ = pos.getZ();
                     queueDamage(level, pos, state, remainingEnergy,
-                            dx, dy, dz);
+                            dx, dy, dz, originVehicleUuid);
                     remainingEnergy = 0.0;
                     terminalReached = true;
                     break;
@@ -251,7 +294,7 @@ public final class ExternalWorldImpactModel {
                 if (!(remainingEnergy >= materialCostJ)) {
                     terminalX = pos.getX(); terminalY = pos.getY(); terminalZ = pos.getZ();
                     queueDamage(level, pos, state, remainingEnergy,
-                            dx, dy, dz);
+                            dx, dy, dz, originVehicleUuid);
                     remainingEnergy = 0.0;
                     terminalReached = true;
                     break;
@@ -268,7 +311,8 @@ public final class ExternalWorldImpactModel {
                 // The broken solid's collision volume is removed in this mutation.
                 // Capture its bounded voxel-local volume before changing the state;
                 // empty collision shapes (including fluids) carry no displaced mass.
-                double displacedMassKg = displacedSolidMassKg(level, pos, state, mc, blast);
+                double displacedMassKg = displacedSolidMassKg(level, pos, state, mc, blast,
+                        contactX, contactY, contactZ, dx, dy, dz, travelLimit, area);
                 // Immediate penetration can remove hundreds of voxels in a
                 // high-energy aircraft crash. Level.destroyBlock emits a vanilla
                 // 2001 break effect for every voxel in addition to the block
@@ -282,12 +326,14 @@ public final class ExternalWorldImpactModel {
                 if (!destroyed) {
                     terminalX = pos.getX(); terminalY = pos.getY(); terminalZ = pos.getZ();
                     queueDamage(level, pos, state, remainingEnergy,
-                            dx, dy, dz);
+                            dx, dy, dz, originVehicleUuid);
                     remainingEnergy = 0.0;
                     terminalReached = true;
                     break;
                 }
                 broken++;
+                if (Float.isFinite(hardness) && hardness > 0.0F)
+                    brokenTerrainHardness += hardness;
                 clearDamageState(level, pos, victimBlock);
                 double afterFracture = Math.max(0.0, remainingEnergy - materialCostJ);
                 remainingEnergy = inelasticContactEnergy(afterFracture, effectiveMass, displacedMassKg);
@@ -298,7 +344,7 @@ public final class ExternalWorldImpactModel {
                 }
             }
 
-            if (terminalReached) break;
+            if (terminalReached || !penetrationRegime) break;
             double advance = segment + 1.0E-5;
             px += dx * advance;
             py += dy * advance;
@@ -315,13 +361,20 @@ public final class ExternalWorldImpactModel {
         if (terminalReached) {
             mode = "RIGID_TERMINAL_MATERIAL";
         } else if (broken > 0) {
-            mode = "IMMEDIATE_MATERIAL_PENETRATION";
+            mode = penetrationRegime ? "IMMEDIATE_MATERIAL_PENETRATION" : "IMMEDIATE_SURFACE_FRACTURE";
         } else {
             mode = "SLICE_TRAVEL_EXHAUSTED_NO_MATERIAL";
         }
-        return new Resolution(true, true, broken > 0,
+        return new Resolution(true, penetrationRegime, broken > 0,
                 energy0, absorbed, remainingEnergy, residualSpeed, broken,
-                terminalX, terminalY, terminalZ, area, mode);
+                terminalX, terminalY, terminalZ, area, mode, brokenTerrainHardness);
+    }
+
+    /** Immediate first-layer fracture; deeper traversal retains the upstream speed gate. */
+    public static boolean surfaceFractureEligible(double impactEnergyJ, double travelMeters) {
+        return ImpactRuntimeConfig.APPLY_BLOCK_EFFECTS && ImpactRuntimeConfig.ENABLE_BLOCK_BREAKING
+            && ImpactRuntimeConfig.ENABLE_PENETRATION && finitePositive(travelMeters)
+            && Double.isFinite(impactEnergyJ) && impactEnergyJ >= ImpactRuntimeConfig.PENETRATION_TRIGGER_J;
     }
 
     private static Resolution rejected(double energyJ, double area, String mode) {
@@ -333,7 +386,7 @@ public final class ExternalWorldImpactModel {
 
     private static void queueDamage(
             ServerLevel level, BlockPos pos, BlockState state, double physicalEnergyJ,
-            double dirX, double dirY, double dirZ
+            double dirX, double dirY, double dirZ, UUID originVehicleUuid
     ) {
         if (level == null || pos == null || state == null || state.isAir()
                 || !Double.isFinite(physicalEnergyJ) || physicalEnergyJ <= 0.0) return;
@@ -347,7 +400,7 @@ public final class ExternalWorldImpactModel {
                 level.dimension().location().toString(),
                 blockId, pos.getX(), pos.getY(), pos.getZ(),
                 mc, physicalEnergyJ * worldMult, baseBreakJ,
-                dirX, dirY, dirZ));
+                dirX, dirY, dirZ, originVehicleUuid));
     }
 
     private static void clearDamageState(ServerLevel level, BlockPos pos, String victimBlock) {
@@ -363,15 +416,17 @@ public final class ExternalWorldImpactModel {
     }
 
     /**
-     * Estimates the solid material mass removed with one voxel. Minecraft's
-     * collision-shape AABBs are block-local; summing their clipped volumes is
-     * bounded to one voxel and excludes non-colliding shapes and fluid volume.
+     * Estimates material mass actually swept during this slice, separately from
+     * the whole-voxel fracture cost. VoxelShape boxes are disjoint and block-local;
+     * their swept intersections exclude unstruck solids, air gaps and fluids.
      * The inelastic energy factor treats ejected material momentum as unavailable
      * to the vehicle; PMIV does not create fragment entities or model deformation.
      */
     private static double displacedSolidMassKg(
             ServerLevel level, BlockPos pos, BlockState state,
-            MaterialThresholdProfile.MaterialClass materialClass, float blastResistance) {
+            MaterialThresholdProfile.MaterialClass materialClass, float blastResistance,
+            double contactX, double contactY, double contactZ,
+            double dx, double dy, double dz, double travelMeters, double areaM2) {
         if (level == null || pos == null || state == null || state.isAir()) return 0.0;
         var shape = state.getCollisionShape(level, pos);
         if (shape.isEmpty()) return 0.0;
@@ -380,10 +435,11 @@ public final class ExternalWorldImpactModel {
             if (box == null || !Double.isFinite(box.minX) || !Double.isFinite(box.minY)
                     || !Double.isFinite(box.minZ) || !Double.isFinite(box.maxX)
                     || !Double.isFinite(box.maxY) || !Double.isFinite(box.maxZ)) continue;
-            double width = Math.max(0.0, Math.min(1.0, box.maxX) - Math.max(0.0, box.minX));
-            double height = Math.max(0.0, Math.min(1.0, box.maxY) - Math.max(0.0, box.minY));
-            double depth = Math.max(0.0, Math.min(1.0, box.maxZ) - Math.max(0.0, box.minZ));
-            double boxVolume = width * height * depth;
+            double boxVolume = SweptContactVolume.intersection(
+                Math.max(0.0, box.minX), Math.max(0.0, box.minY), Math.max(0.0, box.minZ),
+                Math.min(1.0, box.maxX), Math.min(1.0, box.maxY), Math.min(1.0, box.maxZ),
+                contactX - pos.getX(), contactY - pos.getY(), contactZ - pos.getZ(),
+                dx, dy, dz, travelMeters, areaM2);
             if (Double.isFinite(boxVolume)) volume += boxVolume;
         }
         volume = Math.max(0.0, Math.min(1.0, volume));
@@ -432,7 +488,8 @@ public final class ExternalWorldImpactModel {
         // Rapier could hit the adjacent solid column in the same substep. Preserve
         // the same projected area, but place an equivalent square continuously on
         // the block grid and include every voxel column it actually overlaps.
-        double side = Math.sqrt(Math.max(1.0E-6, areaM2));
+        double side = Math.sqrt(Math.max(1.0E-6,
+                SweptContactVolume.planeArea(areaM2, dx, dy, dz)));
         double half = 0.5 * side;
         double ax = Math.abs(dx), ay = Math.abs(dy), az = Math.abs(dz);
 

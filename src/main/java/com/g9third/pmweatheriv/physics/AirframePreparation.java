@@ -225,7 +225,8 @@ public final class AirframePreparation {
     ) {
     }
 
-    static boolean vehicleHasRotorPart(EntityVehicleF_Physics vehicle) {
+    /** Shared rotor identity check; safe on clients without a prepared airframe. */
+    public static boolean vehicleHasRotorPart(EntityVehicleF_Physics vehicle) {
         for (APart part : vehicle.allParts) {
             if (part instanceof PartPropeller propeller
                 && propeller.definition.propeller != null

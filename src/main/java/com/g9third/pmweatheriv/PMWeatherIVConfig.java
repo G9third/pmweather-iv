@@ -10,25 +10,17 @@ public final class PMWeatherIVConfig {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
     private static final ModConfigSpec.BooleanValue ENABLED;
-    private static final ModConfigSpec.BooleanValue AUTO_TRIM_ENABLED;
     private static final ModConfigSpec.DoubleValue WIND_SHEAR_WARNING_THRESHOLD_KNOTS;
     private static final ModConfigSpec.BooleanValue ENABLE_TERRAIN_BLOCK_BREAKING;
 
     public static final ModConfigSpec SPEC;
     private static volatile Values values = Values.defaults();
-    private static volatile boolean autoTrimEnabled = true;
 
     static {
         BUILDER.comment("General settings").translation("config.pmweather_iv.category.general").push("general");
         ENABLED = bool("enabled", true,
             "config.pmweather_iv.general.enabled",
             "Enable PMWeather-IV physics for supported vehicles.");
-        BUILDER.pop();
-
-        BUILDER.comment("Auto trim settings").translation("config.pmweather_iv.category.auto_trim").push("autoTrim");
-        AUTO_TRIM_ENABLED = bool("enabled", true,
-            "config.pmweather_iv.auto_trim.enabled",
-            "Enable automatic elevator trim for supported fixed-wing aircraft. Use the auto-trim key to switch it off or on for one aircraft.");
         BUILDER.pop();
 
         BUILDER.comment("Air warning settings").translation("config.pmweather_iv.category.air_warnings").push("airWarnings");
@@ -52,11 +44,6 @@ public final class PMWeatherIVConfig {
         return values;
     }
 
-    /** Separate from Values to preserve the established physics config contract. */
-    public static boolean autoTrimEnabled() {
-        return autoTrimEnabled;
-    }
-
     public static void onLoading(ModConfigEvent.Loading event) {
         refreshIfOurs(event.getConfig());
     }
@@ -68,7 +55,6 @@ public final class PMWeatherIVConfig {
     private static void refreshIfOurs(ModConfig config) {
         if (config != null && config.getSpec() == SPEC) {
             Values physicsDefaults = Values.defaults();
-            autoTrimEnabled = AUTO_TRIM_ENABLED.get();
             values = new Values(
                 ENABLED.get(),
                 physicsDefaults.bodyAxialDragCoefficient(), physicsDefaults.bodyCrossflowDragCoefficient(),
@@ -81,7 +67,7 @@ public final class PMWeatherIVConfig {
             );
             if (PMIVObserver.loggingEnabled()) {
                 PMIVObserver.log("CONFIG aero=PMAERO integration=SABLE windBatch=FORCE_POINTS_ONCE_PER_TICK values="
-                    + values + " autoTrimEnabled=" + autoTrimEnabled);
+                    + values);
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.g9third.pmweatheriv.mixin;
 
 import com.g9third.pmweatheriv.physics.LandingGearSolver;
+import com.g9third.pmweatheriv.sable.NativeEntityContactAccess;
 import mcinterface1211.BuilderEntityLinkedSeat;
 import mcinterface1211.WrapperEntity;
 import minecrafttransportsimulator.baseclasses.Point3D;
@@ -18,8 +19,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** Keeps IV's position-update cache consistent with the actual vanilla mount. */
 @Mixin(value = WrapperEntity.class, remap = false)
-public abstract class WrapperEntityRiderMixin {
+public abstract class WrapperEntityRiderMixin implements NativeEntityContactAccess {
     @Shadow @Final protected Entity entity;
+    @Override public Entity pmweatherIv$contactEntity() { return entity; }
     @Shadow private AEntityB_Existing cachedEntityRiding;
 
     @Inject(method = "getEntityRiding", at = @At("HEAD"), remap = false)

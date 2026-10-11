@@ -601,9 +601,7 @@ final class SableTerrainSweep {
                                 }
                                 BoundingBox sourceBox = local.sourceBox();
                                 Vector3d impactNormal = new Vector3d(contact.normalWorld());
-                                Vector3d impactPoint = supportPoint(
-                                    cuboid, new Vector3d(impactNormal).negate()
-                                );
+                                Vector3d impactPoint = contactPoint(cuboid, worldShape, impactNormal);
                                 TerrainBoundaryImpact impact = new TerrainBoundaryImpact(
                                     new minecrafttransportsimulator.baseclasses.Point3D(x, y, z),
                                     sourceBox, impactPoint, impactNormal,
@@ -742,6 +740,17 @@ final class SableTerrainSweep {
         return cuboidRadius + boxRadius - centerDistance;
     }
 
+    private static Vector3d contactPoint(OrientedCuboid cuboid, AABB terrain, Vector3dc normal) {
+        Vector3d patch = com.g9third.pmweatheriv.physics.TerrainContactGeometry.contactPoint(
+            cuboid.center(), cuboid.axisX(), cuboid.axisY(), cuboid.axisZ(),
+            cuboid.hx(), cuboid.hy(), cuboid.hz(),
+            new Vector3d(terrain.minX, terrain.minY, terrain.minZ),
+            new Vector3d(terrain.maxX, terrain.maxY, terrain.maxZ));
+        // SAT tolerates a tiny separation at the swept boundary. A degenerate
+        // patch falls back to the original support feature without changing SAT.
+        return patch != null ? patch : supportPoint(cuboid, new Vector3d(normal).negate());
+    }
+
     private static Vector3d supportPoint(OrientedCuboid cuboid, Vector3dc direction) {
         Vector3d point = new Vector3d(cuboid.center());
         addSupportComponent(point, cuboid.axisX(), cuboid.hx(), direction);
@@ -865,9 +874,7 @@ final class SableTerrainSweep {
                                 if (contact != null) {
                                     BoundingBox sourceBox = local.sourceBox();
                                     Vector3d impactNormal = new Vector3d(contact.normalWorld());
-                                    Vector3d impactPoint = supportPoint(
-                                        cuboid, new Vector3d(impactNormal).negate()
-                                    );
+                                    Vector3d impactPoint = contactPoint(cuboid, worldShape, impactNormal);
                                     TerrainBoundaryImpact impact = new TerrainBoundaryImpact(
                                         new minecrafttransportsimulator.baseclasses.Point3D(x, y, z),
                                         sourceBox, impactPoint, impactNormal,
@@ -912,6 +919,32 @@ final class SableTerrainSweep {
      * state/voxel shape once per recovery operation, then reuse the exact world
      * AABBs. This changes no collision geometry or sweep spacing.
      */
+    /** Query-local air proofs; invalidated with the block/height cache after fracture. */
+    private static final class AirColumnProofCache {
+        private static final int CAPACITY = 32;
+        private final int[] minX = new int[CAPACITY], minZ = new int[CAPACITY],
+            maxX = new int[CAPACITY], maxZ = new int[CAPACITY], height = new int[CAPACITY];
+        private int size, next;
+
+        private boolean proves(int x0, int y0, int z0, int x1, int z1) {
+            for (int n = 0; n < size; ++n) {
+                int i = (next - 1 - n + CAPACITY) % CAPACITY;
+                if (x0 >= minX[i] && z0 >= minZ[i] && x1 <= maxX[i] && z1 <= maxZ[i]
+                    && y0 >= height[i]) return true;
+            }
+            return false;
+        }
+
+        private void remember(int x0, int highest, int z0, int x1, int z1) {
+            minX[next] = x0; minZ[next] = z0; maxX[next] = x1; maxZ[next] = z1;
+            height[next] = highest;
+            next = (next + 1) % CAPACITY;
+            size = Math.min(size + 1, CAPACITY);
+        }
+
+        private void clear() { size = 0; next = 0; }
+    }
+
     private static final class TerrainBlockCache {
         private static final List<AABB> EMPTY_SHAPES = List.of();
 
@@ -934,6 +967,7 @@ final class SableTerrainSweep {
         private int worldBlockLookups;
         private int cacheHits;
         private int collisionShapesLoaded;
+        private final AirColumnProofCache airColumns = new AirColumnProofCache();
 
         private TerrainBlockCache(ServerLevel level) {
             this.level = level;
@@ -947,11 +981,18 @@ final class SableTerrainSweep {
          */
         private boolean allCandidateBlocksAboveTerrain(int minX, int minY, int minZ,
                 int maxX, int maxZ) {
+            if (airColumns.proves(minX, minY, minZ, maxX, maxZ)) return true;
+            int highest = Integer.MIN_VALUE;
             for (int x = minX; x <= maxX; ++x) {
                 for (int z = minZ; z <= maxZ; ++z) {
-                    if (minY < columnHeight(x, z)) return false;
+                    int height = columnHeight(x, z);
+                    if (minY < height) return false;
+                    highest = Math.max(highest, height);
                 }
             }
+            // CCD revisits these bounds while bisecting a collision pose.
+            // Retain the exact height proof, including smaller contained bounds.
+            airColumns.remember(minX, highest, minZ, maxX, maxZ);
             return true;
         }
 
@@ -1014,6 +1055,7 @@ final class SableTerrainSweep {
         }
 
         private void clear() {
+            airColumns.clear();
             sections.clear();
             chunks.clear();
             lastChunk = null;

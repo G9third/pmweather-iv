@@ -11,7 +11,6 @@ import com.g9third.pmweatheriv.physics.AutoTrimOffset;
 import com.g9third.pmweatheriv.physics.AutoTrimPreferences;
 import com.g9third.pmweatheriv.physics.AutoTrimRuntime;
 import com.g9third.pmweatheriv.physics.Vec3d;
-import com.g9third.pmweatheriv.network.RoadSuspensionNetwork;
 import dev.ryanhcode.sable.neoforge.event.ForgeSablePostPhysicsTickEvent;
 import dev.ryanhcode.sable.neoforge.event.ForgeSablePrePhysicsTickEvent;
 import dev.ryanhcode.sable.sublevel.system.SubLevelPhysicsSystem;
@@ -88,13 +87,12 @@ public final class SableVehicleManager {
         }
 
         ServerPlayer pilot = com.g9third.pmweatheriv.network.AutoTrimNetwork.currentController(level, vehicle);
-        boolean globallyEnabled = PMWeatherIVConfig.autoTrimEnabled();
-        boolean optedOut = AutoTrimPreferences.disabled(vehicle);
-        if (!globallyEnabled || optedOut) {
+        boolean optedIn = AutoTrimPreferences.enabled(vehicle);
+        if (!optedIn) {
             AutoTrimOffset.freezeAtAppliedOffset(vehicle);
             state.autoTrimOverlayManualTrimChanged = false;
             state.autoTrimOverlayManualTrimDelta = 0.0;
-            String reason = globallyEnabled ? "USER_DISABLED" : "CONFIG_DISABLED";
+            String reason = "USER_DISABLED";
             if (controller.enabled()) cancelAutoTrim(vehicle, level, state, reason);
             boolean heartbeatDue = state.lastAutoTrimStatusTick == Long.MIN_VALUE
                 || level.getGameTime() - state.lastAutoTrimStatusTick >= 10L;
@@ -103,12 +101,11 @@ public final class SableVehicleManager {
                 controller.disable(reason);
                 state.autoTrimAdjusting = false;
                 state.autoTrimCommandedTrim = vehicle.elevatorTrimVar.currentValue;
-                sendAutoTrimStatus(pilot, vehicle, level, state, false);
+                sendAutoTrimStatus(pilot, vehicle, level, state);
             }
             return;
         }
-        if (!AutoTrimPreferences.shouldAutoStart(globallyEnabled, supportedFixedWing,
-            optedOut, pilot != null)) {
+        if (!AutoTrimPreferences.shouldAutoStart(optedIn, supportedFixedWing, pilot != null)) {
             if (pilot == null) {
                 cancelAutoTrim(vehicle, level, state, "DISMOUNTED");
                 state.autoTrimOverlayManualTrimChanged = false;
@@ -148,16 +145,6 @@ public final class SableVehicleManager {
             if (offsetTrim) AutoTrimOffset.setRequested(vehicle, output.trim(), true);
             else vehicle.elevatorTrimVar.setTo(output.trim(), true);
         }
-        if (output.adjusting() && !AutoTrimPreferences.noticeShown(vehicle)) {
-            AutoTrimPreferences.setNoticeShown(vehicle);
-            state.autoTrimFirstNoticePending = true;
-            state.autoTrimFirstNoticeTick = level.getGameTime();
-        }
-        if (state.autoTrimFirstNoticePending
-            && level.getGameTime() - state.autoTrimFirstNoticeTick > 100L) {
-            state.autoTrimFirstNoticePending = false;
-        }
-        boolean firstEngagementNotice = state.autoTrimFirstNoticePending;
         boolean changed = state.lastAutoTrimStatusState != output.state()
             || !state.lastAutoTrimStatusReason.equals(output.reason())
             || state.lastAutoTrimStatusAdjusting != output.adjusting();
@@ -173,9 +160,9 @@ public final class SableVehicleManager {
                 + " currentTrim=" + currentTrim + " requestedTrim=" + output.trim()
                 + " flightPathDegrees=" + flightPath);
         }
-        if (firstEngagementNotice || changed || state.lastAutoTrimStatusTick == Long.MIN_VALUE
+        if (changed || state.lastAutoTrimStatusTick == Long.MIN_VALUE
             || level.getGameTime() - state.lastAutoTrimStatusTick >= 10L) {
-            sendAutoTrimStatus(pilot, vehicle, level, state, firstEngagementNotice);
+            sendAutoTrimStatus(pilot, vehicle, level, state);
             state.lastAutoTrimStatusState = output.state();
             state.lastAutoTrimStatusReason = output.reason();
             state.lastAutoTrimStatusAdjusting = output.adjusting();
@@ -184,10 +171,9 @@ public final class SableVehicleManager {
     }
 
     private static void sendAutoTrimStatus(ServerPlayer pilot, EntityVehicleF_Physics vehicle,
-                                           ServerLevel level, AircraftState state,
-                                           boolean firstEngagementNotice) {
+                                           ServerLevel level, AircraftState state) {
         com.g9third.pmweatheriv.network.AutoTrimNetwork.sendStatus(
-            pilot, vehicle, state, level, firstEngagementNotice
+            pilot, vehicle, state, level
         );
         state.lastAutoTrimStatusState = state.autoTrim.state();
         state.lastAutoTrimStatusReason = state.autoTrim.reason();
@@ -215,12 +201,6 @@ public final class SableVehicleManager {
         if (vehicle == null || vehicle.uniqueUUID == null) return null;
         SableVehicleBody body = BODIES.get(vehicle.uniqueUUID);
         return body != null && body.isUsable() ? body : null;
-    }
-
-    public static double roadSuspensionTravel(PartGroundDevice device) {
-        if (device == null || device.vehicleOn == null) return 0.0;
-        SableVehicleBody body = getBody(device.vehicleOn);
-        return body == null ? 0.0 : body.roadSuspensionTravel(device);
     }
 
     /** True only when Rapier owns the vehicle's real physical collision shape. */
@@ -276,7 +256,6 @@ public final class SableVehicleManager {
     public static void removeBody(EntityVehicleF_Physics vehicle) {
         UUID uuid = vehicle.uniqueUUID;
         SableVehicleBody body = BODIES.remove(uuid);
-        RoadSuspensionNetwork.forget(body == null ? null : body.level(), uuid);
         if (body != null) {
             PMIVObserver.vehicleRemoved(uuid, "iv-vehicle-removed-or-physics-disabled");
         }
@@ -321,7 +300,6 @@ public final class SableVehicleManager {
         if (body != null && (!body.isRegisteredFor(vehicle, level) || !body.isUsable())) {
             retainLoadingRadius(uuid, body);
             BODIES.remove(uuid, body);
-            RoadSuspensionNetwork.forget(level, uuid);
             safeRemove(body, "sableFlightBodyRetire");
             scheduleRetry(uuid, level.getGameTime());
             body = null;
@@ -353,7 +331,6 @@ public final class SableVehicleManager {
                 // no longer exists in IV gameplay/network state.
                 AirframeLoads.SolveResult previous = body.lastTickResult();
                 BODIES.remove(uuid, body);
-                RoadSuspensionNetwork.forget(level, uuid);
                 safeRemove(body, "sableFlightNativeIvCrashDestroyed");
                 clearLifecycleState(uuid);
                 if (previous != null) {
@@ -503,7 +480,6 @@ public final class SableVehicleManager {
         holdMotionRequest(vehicle, state);
         return loads;
     }
-
 
     private static BodyCreationAttempt tryCreateBody(
         EntityVehicleF_Physics vehicle,
@@ -814,7 +790,6 @@ public final class SableVehicleManager {
                 }
                 UUID uuid = body.vehicle().uniqueUUID;
                 PMIVObserver.vehicleRemoved(uuid, "dimension-unloaded");
-                RoadSuspensionNetwork.forget(level, uuid);
                 BODIES.remove(uuid, body);
                 safeRemove(body, "sableFlightLevelUnload");
                 clearLifecycleState(uuid);
@@ -855,7 +830,6 @@ public final class SableVehicleManager {
                 UUID uuid = body.vehicle().uniqueUUID;
                 retainLoadingRadius(uuid, body);
                 BODIES.remove(uuid, body);
-                RoadSuspensionNetwork.forget(body.level(), uuid);
                 safeRemove(body, "sableFlightPrePhysicsRetire");
                 if (body.vehicle().isValid) {
                     // A transient native-body failure may retry, but the old
@@ -884,11 +858,6 @@ public final class SableVehicleManager {
                     body.finishSubstep();
                 } catch (RuntimeException | LinkageError failure) {
                     body.quarantineIntegrationFailure("postSubstep", failure);
-                }
-                long gameTime = body.level().getGameTime();
-                if (body.markRoadSuspensionPublished(gameTime)) {
-                    RoadSuspensionNetwork.publish(body.vehicle(), body.level(), gameTime,
-                        body.roadSuspensionOffsets());
                 }
                 if (sceneHandle == 0L) {
                     sceneHandle = body.sceneHandle();
@@ -948,7 +917,6 @@ public final class SableVehicleManager {
         private static final BodyCreationAttempt UNLOADED_FOOTPRINT =
             new BodyCreationAttempt(null, true);
     }
-
 
     /** Freeze only the IV movement request while collision residency is unavailable. Retain momentum. */
     public static void holdMotionRequest(EntityVehicleF_Physics vehicle, AircraftState state) {
