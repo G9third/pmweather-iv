@@ -65,10 +65,6 @@ Minecraft 1.21.1, NeoForge, Immersive Vehicles, PMWeather, Sable and PMWeather A
 
 ## Current integration
 
-This build requires the matching PMWeather Aeronautics 1.0 **wind revision 3**.
-Same display versions can identify different rebuilds; use the supplied matching artifacts.
-PMWeather 0.17.14 through 0.17.16 is the inspected integration family.
-
 Cars, planes and wheel-equipped helicopters share terrain contact normals and load-bounded
 tire reactions. Authored tire coefficients stay intact. Wheel edge support is approximated
 from the pack's radius; it does not fit an artificial slope across terrain blocks.
