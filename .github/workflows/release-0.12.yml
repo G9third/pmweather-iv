@@ -69,20 +69,33 @@ jobs:
               assert 'version="0.12"' in z.read('META-INF/neoforge.mods.toml').decode()
               assert b'Implementation-Version: 0.12' in z.read('META-INF/MANIFEST.MF')
               assert 'com/g9third/pmweatheriv/client/AutoTrimClient.class' in z.namelist()
+              assert 'com/g9third/pmweatheriv/client/WindMonitorVisibility.class' in z.namelist()
               assert not any(x.endswith('.jar') for x in z.namelist())
               assert all('META-INF/licenses/pmweather_iv/'+f in z.namelist()
                          for f in ('LICENSE','COPYING','COPYING.LESSER','THIRD_PARTY_NOTICES.md'))
           PY
           python3 tools/package_source.py --output PMWeather-IV-0.12-public-source.zip
-      - name: Publish stable release, then remove RC1
+      - name: Save verified wind-HUD patch artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PMWeather-IV-0.12-wind-hud
+          path: |
+            build/libs/PMWeather-IV-0.12.jar
+            PMWeather-IV-0.12-public-source.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Patch existing stable 0.12 release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.12 \
+          test "$(gh release view v0.12 --json isPrerelease --jq '.isPrerelease')" = false
+          gh release upload v0.12 \
             build/libs/PMWeather-IV-0.12.jar \
             PMWeather-IV-0.12-public-source.zip \
+            --clobber
+          gh release edit v0.12 \
             --title 'PMWeather-IV 0.12' \
             --notes-file docs/RELEASE-0.12.md \
-            --target "$GITHUB_SHA" \
             --latest
-          gh release delete v0.12.0-rc1 --cleanup-tag --yes
+          git tag -f v0.12 "$GITHUB_SHA"
+          git push --force origin refs/tags/v0.12
