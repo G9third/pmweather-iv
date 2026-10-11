@@ -163,10 +163,12 @@ tasks.register('checkTraceSchemaRegression', JavaExec) {
     }
 }
 
-['EntitySurfaceContactRegression', 'GearImpactContactRegression', 'SweptContactVolumeRegression', 'AutoTrimRegression', 'CrashGeometryCacheRegression', 'RigidTerrainContactRegression', 'MovingModelHullRegression', 'ContactLifecycleRegression', 'AnimationEvidenceRegression', 'NetworkStateRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'RoadVehicleCompatibilityRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].each { regression ->
-    def mainName = ['AutoTrimRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].contains(regression)
-        ? "com.g9third.pmweatheriv.physics.${regression}"
-        : regression
+['EntitySurfaceContactRegression', 'GearImpactContactRegression', 'SweptContactVolumeRegression', 'AutoTrimRegression', 'CrashGeometryCacheRegression', 'RigidTerrainContactRegression', 'MovingModelHullRegression', 'ContactLifecycleRegression', 'AnimationEvidenceRegression', 'NetworkStateRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'RoadVehicleCompatibilityRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression', 'WindMonitorVisibilityRegression'].each { regression ->
+    def mainName = regression == 'WindMonitorVisibilityRegression'
+        ? 'com.g9third.pmweatheriv.client.WindMonitorVisibilityRegression'
+        : ['AutoTrimRegression', 'WingMomentRegression', 'ObserverIsolationRegression', 'AuthoredSurfacePoseRegression', 'RoadSuspensionRegression'].contains(regression)
+            ? "com.g9third.pmweatheriv.physics.${regression}"
+            : regression
     def verification = tasks.register("check${regression}", JavaExec) {
         dependsOn tasks.named('regressionClasses')
         classpath = sourceSets.regression.runtimeClasspath
