@@ -11,8 +11,8 @@ import org.spongepowered.asm.mixin.gen.Invoker;
  * <p>PMWeather-IV deliberately targets Rapier3D by binary name rather than
  * importing Sable's internal Rapier implementation as a normal Java API.  The
  * exact invoker descriptors used here were compared against the supplied Sable
- * 2.0.3 and 2.0.5 sources and are unchanged.  Runtime metadata accepts the
- * compatible [2.0.5,3.0.0) line while the local development baseline is 2.0.5.</p>
+ * 2.0.0, 2.0.3 and 2.0.5 APIs and are unchanged.  Runtime metadata accepts the
+ * compatible [2.0.0,3.0.0) line while the local development baseline is 2.0.5.</p>
  */
 @Mixin(targets = "dev.ryanhcode.sable.physics.impl.rapier.Rapier3D", remap = false)
 public interface Rapier3DInvoker {

@@ -1,7 +1,7 @@
 {
   "version": "0.12.1",
   "algorithm": "SHA-256",
-  "generatedUtc": "2026-10-11T23:17:36.642486+00:00",
+  "generatedUtc": "2026-10-11T23:34:18.953493+00:00",
   "privateDeveloperSourcesBundled": false,
   "dependencyBinariesBundled": false,
   "contentPackAssetsBundled": false,
@@ -33,8 +33,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 8794,
-      "sha256": "f94b45a7fbf712f09dd09012b15ad88bf34ce0583618a1c62bb75ac0a4b9fc2e"
+      "bytes": 8851,
+      "sha256": "85b74cb71e2414ac1b5e0674ae297740256bcd5bd88bb7dbe8d9729faeb0879e"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -60,6 +60,11 @@
       "path": "docs/AUDIT-FIXES-20261009.md",
       "bytes": 1240,
       "sha256": "4f58445825983b603551ef288d0722480ff1f3098e26475ffac865f3efca5518"
+    },
+    {
+      "path": "docs/BASELINE-COMPATIBILITY.md",
+      "bytes": 1108,
+      "sha256": "cc98d82f7fde1b631aea707dbd68129432e5bb8880e994b1300790ebfaf95475"
     },
     {
       "path": "docs/COMPATIBILITY-COVERAGE.md",
@@ -88,8 +93,8 @@
     },
     {
       "path": "docs/RELEASE-0.12.1.md",
-      "bytes": 1377,
-      "sha256": "9de4390e4cfba1442e02b583ed83aa42a793fa32c089722bfd8e200e3b382a10"
+      "bytes": 1365,
+      "sha256": "fc2498c84630ccf617c54a7fbec13fda9b3c01d6f8cb310cc842c30f1de052b9"
     },
     {
       "path": "docs/RELEASE-0.12.md",
@@ -273,8 +278,8 @@
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/Rapier3DInvoker.java",
-      "bytes": 3207,
-      "sha256": "f86212735d301e6d9d9f85c0d7b389d459971f893f71182de9c949449fb9dcc1"
+      "bytes": 3211,
+      "sha256": "629f7cc119bde509b445b839ae6e33cdb8b419abb9d9ec87f57eaee70891c617"
     },
     {
       "path": "src/main/java/com/g9third/pmweatheriv/mixin/RapierPhysicsPipelineMixin.java",
@@ -873,8 +878,8 @@
     },
     {
       "path": "src/main/resources/META-INF/neoforge.mods.toml",
-      "bytes": 1500,
-      "sha256": "3813cf082a3eff0e7d9d58eec952165b70c6c98706d6c754a54ed5099c49ff12"
+      "bytes": 1498,
+      "sha256": "0db21fb318ef4febd156563de0d64adbbd82099bd05988fc301ed3c471c1a3d5"
     },
     {
       "path": "src/main/resources/assets/pmweather_iv/lang/en_us.json",
@@ -1003,8 +1008,8 @@
     },
     {
       "path": "tools/package_source.py",
-      "bytes": 3625,
-      "sha256": "d447c2e45cfa8648ad943216c2605372dbd31d2cd862deca8af54e7920fb4898"
+      "bytes": 3678,
+      "sha256": "240b39bf294bbc87e0bce51c224e0a2a9678cc6d3c524478cfd3ac2137183881"
     }
   ]
 }

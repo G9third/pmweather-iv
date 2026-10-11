@@ -8,6 +8,7 @@ fixed_files.append('gradle/wrapper/LICENSE')
 fixed_files.append('docs/RELEASE-0.12.0-rc1.md')
 fixed_files.append('docs/RELEASE-0.12.md')
 fixed_files.append('docs/RELEASE-0.12.1.md')
+fixed_files.append('docs/BASELINE-COMPATIBILITY.md')
 fixed_files.extend([
  'tools/EntitySurfaceContactRegression.java',
  'tools/CrashGeometryCacheRegression.java',

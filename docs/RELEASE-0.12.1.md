@@ -3,7 +3,7 @@
 ## Compatibility
 
 - Adds support for **PMWeather 0.16.4 through PMWeather Aeronautics 1.1 or later**. The native XYZ wind, including vertical tornado wind, comes from PMWeather's own API.
-- Retains PMWeather **0.17.14 through 0.17.16** support with compatible PMAero wind revision 3 and packed API version 2. The newer weather integration is unchanged.
+- Allows PMWeather **0.17.x, starting at 0.17.0**, and **Sable 2.x, starting at 2.0.0**, with PMAero 1.1. The newer weather integration is unchanged.
 - Keeps the existing vehicle physics, content-pack suspension limits, particle exclusions, Right Alt auto-trim toggle and shared `/pmaero` wind/weather-test commands.
 
 Install dependency mods separately. For PMWeather 0.16.4, use the [PMAero 1.1 source and build instructions](https://github.com/G9third/pmweather-aeronautics); older PMAero 1.0 downloads do not support that weather version.
@@ -16,4 +16,4 @@ Install dependency mods separately. For PMWeather 0.16.4, use the [PMAero 1.1 so
 
 The downloads exclude third-party dependency JARs and private development recorders, profiling, and diagnostic commands. The source build defaults to the clean variant.
 
-Clean and development compilation and static API/packaging review succeeded locally. No new Minecraft session or regression suite was run for this compatibility update; in-game behavior still needs confirmation with the older weather version.
+Clean and development compilation and static API/packaging review succeeded locally. Baseline compilation and existing regression checks passed against PMWeather 0.17.0 and Sable 2.0.0. No Minecraft session was run for this compatibility update.

@@ -43,14 +43,14 @@ side="BOTH"
 [[dependencies.pmweather_iv]]
 modId="pmweather"
 type="required"
-versionRange="[0.16.4],[0.17.14,0.17.17)"
+versionRange="[0.16.4],[0.17.0,0.18.0)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.pmweather_iv]]
 modId="sable"
 type="required"
-versionRange="[2.0.5,3.0.0)"
+versionRange="[2.0.0,3.0.0)"
 ordering="AFTER"
 side="BOTH"
 

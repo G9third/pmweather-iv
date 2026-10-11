@@ -70,7 +70,7 @@ jobs:
               assert b'Implementation-Version: 0.12.1' in z.read('META-INF/MANIFEST.MF')
               assert 'com/g9third/pmweatheriv/client/AutoTrimClient.class' in z.namelist()
               assert 'com/g9third/pmweatheriv/client/WindMonitorVisibility.class' in z.namelist()
-              assert '[0.16.4],[0.17.14,0.17.17)' in z.read('META-INF/neoforge.mods.toml').decode()
+              assert '[0.16.4],[0.17.0,0.18.0)' in z.read('META-INF/neoforge.mods.toml').decode()
               assert not any(x.startswith('com/g9third/pmweatheriv/trace/') for x in z.namelist())
               assert not any(x.endswith('.jar') for x in z.namelist())
               assert all('META-INF/licenses/pmweather_iv/'+f in z.namelist()
@@ -94,19 +94,16 @@ jobs:
             SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
-      - name: Publish new 0.12.1 release
+      - name: Update 0.12.1 compatibility release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.12.1 >/dev/null 2>&1; then
-            echo 'Release v0.12.1 already exists; refusing to replace it.' >&2
-            exit 1
-          fi
-          gh release create v0.12.1 \
+          gh release upload v0.12.1 \
             build/libs/PMWeather-IV-0.12.1.jar \
             PMWeather-IV-0.12.1-public-source.zip \
-            SHA256SUMS.txt \
-            --target "$GITHUB_SHA" \
+            SHA256SUMS.txt --clobber
+          gh release edit v0.12.1 \
             --title 'PMWeather-IV 0.12.1' \
-            --notes-file docs/RELEASE-0.12.1.md \
-            --latest
+            --notes-file docs/RELEASE-0.12.1.md --latest
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/v0.12.1" \
+            -f sha="$GITHUB_SHA" -F force=true

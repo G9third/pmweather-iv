@@ -61,11 +61,11 @@ The public artifact contains gameplay physics, state synchronization, the wind H
 
 ## Runtime dependencies
 
-Minecraft 1.21.1, NeoForge, Immersive Vehicles 24 or later, Sable 2.0.5 through 2.x,
+Minecraft 1.21.1, NeoForge, Immersive Vehicles 24 or later, Sable 2.x (2.0.0 or later),
 PMWeather and PMWeather Aeronautics. Install dependency mods separately.
 
 - **PMWeather 0.16.4 requires PMAero 1.1 or later** for the native XYZ compatibility adapter, including vertical tornado wind.
-- **PMWeather 0.17.14 through 0.17.16** retain support with PMAero 1.0 or later using the required wind revision 3 and packed API version 2.
+- **PMWeather 0.17.x (0.17.0 or later)** and **Sable 2.x (2.0.0 or later)** use PMAero 1.1 for the expanded version range. The required wind revision 3 and packed API version 2 remain unchanged.
 - Other PMWeather versions are not declared supported.
 
 Get the current PMAero source and build instructions from [PMWeather Aeronautics](https://github.com/G9third/pmweather-aeronautics).
