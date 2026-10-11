@@ -44,6 +44,7 @@ jobs:
               expected = files[filename]['sha256']
               candidates = [x for x in data['files'] if x.get('hashes',{}).get('sha256') == expected]
               if not candidates:
+                  print('Available official files:', [(x.get('filename'), x.get('size'), x.get('hashes',{}).get('sha256')) for x in data['files']], flush=True)
                   raise RuntimeError('No byte-identical authorized Modrinth artifact for '+filename)
               save(filename, fetch(candidates[0]['url']))
           save('Immersive Vehicles-1.21.1-24.0.0.jar', fetch('https://edge.forgecdn.net/files/7926/606/Immersive%20Vehicles-1.21.1-24.0.0.jar'))
