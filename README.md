@@ -33,7 +33,9 @@ Test commands require operator permission on the server. The default flight sequ
 
 The private development artifact adds operator-only `/pmiv trace ...` and `/pmiv probe ...` commands. `/pmivtrace` and `/pmivtest` remain aliases. These commands are not included in the public artifact.
 
-[Watch full weather test cycle](https://streamable.com/fomjry)
+[![Watch the full weather test cycle on YouTube](https://img.youtube.com/vi/pCM3C3d09k0/hqdefault.jpg)](https://www.youtube.com/watch?v=pCM3C3d09k0)
+
+[Watch the full weather test cycle on YouTube](https://www.youtube.com/watch?v=pCM3C3d09k0)
 
 ## Build
 
