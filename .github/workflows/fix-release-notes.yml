@@ -1,0 +1,22 @@
+name: Correct v0.12 release notes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-release-notes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update published release notes without changing assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit v0.12 --notes-file docs/RELEASE-0.12.md
