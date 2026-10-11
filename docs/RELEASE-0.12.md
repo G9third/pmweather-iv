@@ -9,12 +9,12 @@
 
 ## Other changes
 
-Includes the source changes and compatibility updates documented in [0.12.0-rc1](RELEASE-0.12.0-rc1.md).
+Includes the source changes and compatibility updates documented in [0.12.0-rc1](https://github.com/G9third/pmweather-iv/blob/v0.12/docs/RELEASE-0.12.0-rc1.md).
 The public-source package excludes third-party dependency JARs and private development tooling.
 
-## Live wind HUD scope (source update after 0.12 release)
+## Live wind HUD scope
 
 - Automatic live wind display now follows occupancy of an IV aircraft pilot seat: it appears while piloting and hides after dismount.
 - `/pmaero live on` enables a manual display elsewhere; `/pmaero live off` disables the manual display and suppresses automatic display until the next pilot-seat entry.
 - A manual-on choice persists after dismount but resets on world change or disconnect. Wind sampling stops when neither manual nor automatic visibility is active.
-- This section documents the newer source; the previously published 0.12 JAR is unchanged until rebuilt.
+- The 0.12 stable release JAR and matching source ZIP include this wind HUD fix.
