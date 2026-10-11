@@ -1,5 +1,9 @@
 # PMWeather-IV 0.12
 
+> **REQUIRED DEPENDENCY: PMWeather Aeronautics (PMAero) 1.0 or newer**  
+> **PMWeather-IV will not work without PMAero.** Install it alongside PMWeather, Sable, and Immersive Vehicles.  
+> **Download PMAero:** [CurseForge — version 1.0](https://www.curseforge.com/minecraft/mc-mods/pmweather-aeronautics-compat/files/9114809) · [Modrinth — versions/downloads](https://modrinth.com/mod/pmweather-aeronautics-compat/versions)
+
 ## Auto-trim HUD
 
 - Auto trim remains off by default and is toggled per supported fixed-wing aircraft using the rebindable Right Alt key.
