@@ -390,6 +390,7 @@ public final class LandingGearSolver {
                     constraintStepSeconds, constraints);
             }
         }
+        RoadWindTraction.recordResidualSlip(windTraction, reaction, constraints, orientation, brake);
         solvedLinear = reaction.velocityWorld();
         solvedAngular = reaction.angularVelocityBody();
         double[] normalImpulses = new double[contacts.size()];

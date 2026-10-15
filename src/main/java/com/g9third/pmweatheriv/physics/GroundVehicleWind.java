@@ -300,7 +300,7 @@ public final class GroundVehicleWind {
             state.bodyWidth, state.bodyHeight, state.bodyLength, state.wettedArea,
             state.centerOfMassLocal
         );
-        if (!fullRelativeAir) {
+        if (!fullRelativeAir || config.windForceMultiplier() != 1.0) {
             PMAeroBridge.evaluateExternalBodyInto(
                 state.stillBodyInput, state.stillBodyOutput, density,
                 axialApiCd, crossflowCd, state.bodyWidth, state.bodyHeight, state.bodyLength,
@@ -334,6 +334,26 @@ public final class GroundVehicleWind {
         state.windStations=List.copyOf(loadStations);
         forceBody=forceBody.add(roofForce);
         torqueBody=torqueBody.add(roofTorque);
+        double windScale = config.windForceMultiplier();
+        if (windScale != 1.0) {
+            Vec3d calmForce = Vec3d.ZERO, calmTorque = Vec3d.ZERO;
+            if (fullRelativeAir) {
+                calmForce = header(state.stillBodyOutput, 0);
+                calmTorque = header(state.stillBodyOutput, 3);
+                for (int i=0; i<patchCount; ++i) {
+                    var panel = state.roofPanels.size()==patchCount ? state.roofPanels.get(i)
+                        : new RoadRoofPressure.Panel(state.patches.get(i).pointLocal(),Vec3d.ZERO,0);
+                    int offset = i*inputStride+8;
+                    Vec3d flow = new Vec3d(state.stillBodyInput[offset], state.stillBodyInput[offset+1], state.stillBodyInput[offset+2]);
+                    flow = flow.add(omegaBody.cross(panel.pointLocal().subtract(state.patches.get(i).pointLocal())));
+                    Vec3d panelForce = RoadRoofPressure.force(panel, flow, density, config.roadRoofSuctionPressureCoefficient());
+                    calmForce = calmForce.add(panelForce);
+                    calmTorque = calmTorque.add(panel.pointLocal().subtract(state.centerOfMassLocal).cross(panelForce));
+                }
+            }
+            forceBody = calmForce.add(forceBody.subtract(calmForce).scale(windScale));
+            torqueBody = calmTorque.add(torqueBody.subtract(calmTorque).scale(windScale));
+        }
         if (!forceBody.isFinite() || !torqueBody.isFinite()) {
             throw new IllegalStateException("Non-finite ground-vehicle PMAero wind result");
         }

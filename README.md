@@ -1,12 +1,12 @@
-# PMWeather-IV 0.12.1
+# PMWeather-IV 0.12.1b
 
 Standalone Immersive Vehicles addon connecting ground vehicles and aircraft to PMWeather Aeronautics and persistent Sable/Rapier physics.
 
 Ground vehicles share aircraft body collision, terrain recovery and integrated True Impact handling. IV retains drivetrain, controls and content-pack tire coefficients; road drive/braking acts through physical load-bounded tire contacts. Wheel positions and suspension animations come from the content pack. PMIV adds no suspension travel; wind-driven body roll and tipping follow physical loads at those authored contact points. Compatibility follows authored features and geometry. Helicopters retain the assisted controller.
 
-Road tires retain ordinary pack grip. On grass and loose terrain, excessive weather loading gradually enables a lower sliding-grip limit using actual wheel support. Drive and brakes share that contact budget. Pavement coefficients and airborne aerodynamics are unchanged. This compatibility correction preserves normal handling; its generic soil limits are approximations rather than measurements for every pack tire.
+Road tires retain ordinary pack grip. Excessive weather loading gradually enables a lower sliding-grip limit using actual wheel support on all terrain, including hard or unclassified blocks. Drive and brakes share that contact budget. Normal driving coefficients and airborne aerodynamics are unchanged. This compatibility correction preserves normal handling; its generic soil limits are approximations rather than measurements for every pack tire.
 
-Road wind breakaway limits differ for grass, dirt/clay, gravel, sand, snow and ice, including wet surfaces. These limits are capped by the pack's own tire coefficients and take effect only when tangential weather force exceeds the terrain's available support-based grip. The transition reaches full sliding correction at 10% overload and retains the existing time smoothing. IV material categories and block slipperiness determine the underlying contact properties; Sable friction datapacks do not currently configure PMIV tire grip.
+Road wind breakaway limits differ for grass, dirt/clay, gravel, sand, snow and ice, including wet surfaces. These limits are capped by the pack's own tire coefficients and take effect only when tangential weather force exceeds the configured fraction of the terrain's support-based grip. The transition reaches full sliding correction at 10% overload. Once weather triggers a skid, sliding grip persists until contact slip settles; ordinary unbraked wheel rotation does not keep skid mode active. IV material categories and block slipperiness determine the underlying contact properties; Sable friction datapacks do not currently configure PMIV tire grip.
 
 IV particle wind preserves stationary surface effects such as tire marks, bullet decals and water ripples, plus stationary fixed blast effects and brief flashes. Authored movement and orientation determine eligibility; smoke remains eligible for wind even when a pack caps its native velocity to zero. Attached effects, streaks, trails and fluid-bound particles retain their existing exclusions. Classification is cached once per particle, and eligible particles share PMAero's bounded wind cache.
 
@@ -22,9 +22,9 @@ The displayed angle is live server trim, not a target. Auto trim uses IV's nativ
 
 Please report content-pack incompatibilities or unexpected behavior across cars, tanks, APCs, planes and helicopters at [PMWeather-IV Issues](https://github.com/G9third/pmweather-iv/issues). Include the pack name and version, mod versions, and what happened. A development trace is optional.
 
-The public config keeps player-facing switches for general physics, the wind-shear warning threshold and terrain block breaking. Auto trim is enabled per aircraft with the key and has no global config toggle. Internal aerodynamic coefficients and model sampling budgets now use the reviewed defaults in code. Older config files may retain those retired entries, but PMIV no longer reads them. The existing `terrainDamage.enableBlockBreaking` setting still controls crash terrain removal and continues to require IV's own global block-breaking setting.
+The public config keeps player-facing settings for general physics, wind force, ground-vehicle breakaway force, the wind-shear warning threshold and terrain block breaking. Auto trim is enabled per aircraft with the key and has no global config toggle. Internal aerodynamic coefficients and model sampling budgets now use the reviewed defaults in code. Older config files may retain those retired entries, but PMIV no longer reads them. The existing `terrainDamage.enableBlockBreaking` setting still controls crash terrain removal and continues to require IV's own global block-breaking setting.
 
-See the [0.12.1 release notes](docs/RELEASE-0.12.1.md), [0.12 release notes](docs/RELEASE-0.12.md), [previous release notes](docs/RELEASE-0.11.53.md), [architecture](docs/ARCHITECTURE.md) and [notices](THIRD_PARTY_NOTICES.md) for behavior, supported modes and limitations.
+See the [0.12.1b release notes](docs/RELEASE-0.12.1b.md), [0.12.1 release notes](docs/RELEASE-0.12.1.md), [0.12 release notes](docs/RELEASE-0.12.md), [previous release notes](docs/RELEASE-0.11.53.md), [architecture](docs/ARCHITECTURE.md) and [notices](THIRD_PARTY_NOTICES.md) for behavior, supported modes and limitations.
 
 ## Wind display and weather test
 
@@ -52,6 +52,15 @@ The private development artifact adds operator-only `/pmiv trace ...` and `/pmiv
 [![Watch the full weather test cycle on YouTube](https://img.youtube.com/vi/pCM3C3d09k0/hqdefault.jpg)](https://www.youtube.com/watch?v=pCM3C3d09k0)
 
 [Watch the full weather test cycle on YouTube](https://www.youtube.com/watch?v=pCM3C3d09k0)
+
+## Wind settings
+
+PMIV has its own settings in `pmweather_iv-common.toml`, independent of PMAero force tuning:
+
+- `wind.windForceMultiplier` defaults to `1.0`. It scales weather-induced vehicle force and torque, preserving calm-air handling and actual wind readings.
+- `wind.breakawayForceMultiplier` defaults to `1.0`. Lower values let wind break ground-vehicle grip sooner; higher values require more wind force. Normal driving grip is unchanged.
+
+The default breakaway activation threshold is one quarter of the original terrain limit. Wind-triggered sliding grip is one quarter of the previous sliding-grip limit; normal driving grip is unchanged. Both multipliers accept values from `0.0` to `10.0`.
 
 ## Build
 

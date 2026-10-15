@@ -204,7 +204,7 @@ public final class RoadVehiclePhysics {
         if (!force.isFinite() || !torque.isFinite()) throw new IllegalStateException("Non-finite Sable road load");
         // Compare identical geometry and motion without weather. This isolates
         // weather disturbance from ordinary drag without another wind query.
-        Vec3d calmRoofForce = Vec3d.ZERO;
+        Vec3d calmRoofForce = Vec3d.ZERO, calmRoofTorque = Vec3d.ZERO;
         for (int i=0; i<patches.size(); ++i) {
             var patch = patches.get(i);
             var panel = state.roadBody.roofPanels().get(i);
@@ -214,15 +214,23 @@ public final class RoadVehiclePhysics {
             state.pmaeroBodyInputBuffer[b+8] = flow.x();
             state.pmaeroBodyInputBuffer[b+9] = flow.y();
             state.pmaeroBodyInputBuffer[b+10] = flow.z();
-            calmRoofForce = calmRoofForce.add(RoadRoofPressure.force(panel,
+            Vec3d calmPanelForce = RoadRoofPressure.force(panel,
                 flow.add(omega.cross(panel.pointLocal().subtract(patch.pointLocal()))),
-                density, config.roadRoofSuctionPressureCoefficient()));
+                density, config.roadRoofSuctionPressureCoefficient());
+            calmRoofForce = calmRoofForce.add(calmPanelForce);
+            calmRoofTorque = calmRoofTorque.add(panel.pointLocal().subtract(state.plan.centerOfMassLocal()).cross(calmPanelForce));
         }
         PMAeroBridge.evaluateExternalBodyInto(state.pmaeroBodyInputBuffer, state.pmaeroBodyOutputBuffer,
             density, cd/attenuation, config.groundCrossflowDragCoefficient(), body.width(), body.height(),
             body.length(), body.wettedArea(), state.plan.centerOfMassLocal());
         Vec3d calmForce = new Vec3d(out[0], out[1], out[2]).add(calmRoofForce);
-        state.roadWeatherForceWorld = toWorld(orientation, force.subtract(calmForce));
+        Vec3d calmTorque = new Vec3d(out[3], out[4], out[5]).add(calmRoofTorque);
+        double windScale = config.windForceMultiplier();
+        state.roadWeatherForceWorld = toWorld(orientation, force.subtract(calmForce).scale(windScale));
+        if (windScale != 1.0) {
+            force = calmForce.add(force.subtract(calmForce).scale(windScale));
+            torque = calmTorque.add(torque.subtract(calmTorque).scale(windScale));
+        }
         if (!state.roadWeatherForceWorld.isFinite()) throw new IllegalStateException("Non-finite road weather disturbance");
         return new SubstepAerodynamicLoads(toWorld(orientation,force),torque,torque,0,0,
             field.initializeCenter(),captureSurfaceSamples ? List.copyOf(surfaces) : List.of());

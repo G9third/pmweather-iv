@@ -136,7 +136,46 @@ public final class AircraftPhysics {
                 density = ivCompatibleAirDensity(level, vehicle, positionWorld.y());
             }
             Vec3d omegaWorld = toWorld(vehicle, angularVelocityBody);
-            WindField windField = new WindField(vehicle, windSnapshot);
+            Accumulator calm = null;
+            double windScale = config.windForceMultiplier();
+            if (windScale != 1.0 && windScale != 0.0) {
+                var savedTargets = new java.util.HashMap<>(state.surfaceSeparationTargets);
+                SUBSTEP_EVALUATION.set(new SubstepEvaluationContext(positionWorld, orientation,
+                    linearVelocityWorld, angularVelocityBody, timeStepSeconds, false));
+                try {
+                    var stations = new java.util.LinkedHashMap<String, WindSample>();
+                    windSnapshot.stations().forEach((name, sample) -> stations.put(name,
+                        new WindSample(sample.worldPosition(), Vec3d.ZERO, Vec3d.ZERO)));
+                    WindField calmField = new WindField(vehicle,
+                        new WindFieldSnapshot(stations, List.copyOf(stations.values()), Vec3d.ZERO));
+                    calm = new Accumulator(state, false, false);
+                    addBodyPressure(vehicle, geometry, model, density, linearVelocityWorld,
+                        omegaWorld, calmField, calm, config);
+                    if (!vehicle.outOfHealth) {
+                        if (state.plan.rotorcraft()) {
+                            applyDistributedRotorLoads(vehicle, state, density,
+                                rotorActuators == null ? List.of() : rotorActuators,
+                                linearVelocityWorld, omegaWorld, calmField, calm);
+                        } else {
+                            addFixedWingAerodynamics(vehicle, geometry, model, areaPlan, density,
+                                linearVelocityWorld, omegaWorld, state, calmField, calm, config);
+                        }
+                    }
+                } finally {
+                    state.surfaceSeparationTargets.clear();
+                    state.surfaceSeparationTargets.putAll(savedTargets);
+                    SUBSTEP_EVALUATION.set(new SubstepEvaluationContext(positionWorld, orientation,
+                        linearVelocityWorld, angularVelocityBody, timeStepSeconds, true));
+                }
+            }
+            WindFieldSnapshot forceWind = windSnapshot;
+            if (windScale == 0.0) {
+                var stations = new java.util.LinkedHashMap<String, WindSample>();
+                windSnapshot.stations().forEach((name, sample) -> stations.put(name,
+                    new WindSample(sample.worldPosition(), Vec3d.ZERO, Vec3d.ZERO)));
+                forceWind = new WindFieldSnapshot(stations, List.copyOf(stations.values()), Vec3d.ZERO);
+            }
+            WindField windField = new WindField(vehicle, forceWind);
             Accumulator accumulator = new Accumulator(state, com.g9third.pmweatheriv.devsupport.PMIVObserver.isCapturing(vehicle.uniqueUUID), false);
             addBodyPressure(
                 vehicle, geometry, model, density, linearVelocityWorld, omegaWorld,
@@ -155,6 +194,14 @@ public final class AircraftPhysics {
                         omegaWorld, state, windField, accumulator, config
                     );
                 }
+            }
+            if (calm != null) {
+                accumulator.forceWorld = calm.forceWorld.add(
+                    accumulator.forceWorld.subtract(calm.forceWorld).scale(windScale));
+                accumulator.torqueBody = calm.torqueBody.add(
+                    accumulator.torqueBody.subtract(calm.torqueBody).scale(windScale));
+                accumulator.componentPressureTorqueBody = calm.componentPressureTorqueBody.add(
+                    accumulator.componentPressureTorqueBody.subtract(calm.componentPressureTorqueBody).scale(windScale));
             }
             if (!accumulator.forceWorld.isFinite() || !accumulator.torqueBody.isFinite()) {
                 throw new IllegalStateException("Nonfinite aerodynamic load");

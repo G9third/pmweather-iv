@@ -13,6 +13,9 @@ public final class PMWeatherIVConfig {
     private static final ModConfigSpec.DoubleValue WIND_SHEAR_WARNING_THRESHOLD_KNOTS;
     private static final ModConfigSpec.BooleanValue ENABLE_TERRAIN_BLOCK_BREAKING;
 
+    private static final ModConfigSpec.DoubleValue WIND_FORCE_MULTIPLIER;
+    private static final ModConfigSpec.DoubleValue BREAKAWAY_FORCE_MULTIPLIER;
+
     public static final ModConfigSpec SPEC;
     private static volatile Values values = Values.defaults();
 
@@ -21,6 +24,16 @@ public final class PMWeatherIVConfig {
         ENABLED = bool("enabled", true,
             "config.pmweather_iv.general.enabled",
             "Enable PMWeather-IV physics for supported vehicles.");
+        BUILDER.pop();
+
+        BUILDER.comment("PMIV wind settings, independent of PMAero force settings")
+            .translation("config.pmweather_iv.category.wind").push("wind");
+        WIND_FORCE_MULTIPLIER = number("windForceMultiplier", 1.0, 0.0, 10.0,
+            "config.pmweather_iv.wind.force",
+            "Multiply weather-induced vehicle force and torque. Does not change wind readings or calm-air handling.");
+        BREAKAWAY_FORCE_MULTIPLIER = number("breakawayForceMultiplier", 1.0, 0.0, 10.0,
+            "config.pmweather_iv.wind.breakaway",
+            "Multiply the ground-vehicle wind force needed to enter sliding grip. Lower values let wind break grip sooner; normal driving grip is unchanged.");
         BUILDER.pop();
 
         BUILDER.comment("Air warning settings").translation("config.pmweather_iv.category.air_warnings").push("airWarnings");
@@ -63,7 +76,7 @@ public final class PMWeatherIVConfig {
                 physicsDefaults.baseWingDragCoefficient(), physicsDefaults.liftSlopePerRadian(),
                 physicsDefaults.maxLiftCoefficient(), physicsDefaults.maximumModelPressurePatches(),
                 physicsDefaults.maximumGroundPressurePatches(), WIND_SHEAR_WARNING_THRESHOLD_KNOTS.get(),
-                ENABLE_TERRAIN_BLOCK_BREAKING.get()
+                ENABLE_TERRAIN_BLOCK_BREAKING.get(), WIND_FORCE_MULTIPLIER.get(), BREAKAWAY_FORCE_MULTIPLIER.get()
             );
             if (PMIVObserver.loggingEnabled()) {
                 PMIVObserver.log("CONFIG aero=PMAERO integration=SABLE windBatch=FORCE_POINTS_ONCE_PER_TICK values="
@@ -104,11 +117,13 @@ public final class PMWeatherIVConfig {
         int maximumModelPressurePatches,
         int maximumGroundPressurePatches,
         double windShearWarningThresholdKnots,
-        boolean enableBlockBreaking
+        boolean enableBlockBreaking,
+        double windForceMultiplier,
+        double breakawayForceMultiplier
     ) {
         public static Values defaults() {
             return new Values(
-                true, 0.18, 0.95, 0.6, 0.95, 0.15, 0.08, 0.028, 4.8, 1.65, 14, 64, 15.0, true
+                true, 0.18, 0.95, 0.6, 0.95, 0.15, 0.08, 0.028, 4.8, 1.65, 14, 64, 15.0, true, 1.0, 1.0
             );
         }
     }

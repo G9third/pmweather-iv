@@ -44,5 +44,8 @@
   "hud.pmweather_iv.auto_trim.reason.user_disabled": "Disabled for this aircraft",
   "hud.pmweather_iv.auto_trim.trim": "Trim %s",
   "config.pmweather_iv.category.display": "Display",
-  "config.pmweather_iv.display.auto_live_wind_in_pilot_seat": "Show Live Wind When Entering a Pilot Seat"
+  "config.pmweather_iv.display.auto_live_wind_in_pilot_seat": "Show Live Wind When Entering a Pilot Seat",
+  "config.pmweather_iv.category.wind": "Wind",
+  "config.pmweather_iv.wind.force": "Wind Force Multiplier",
+  "config.pmweather_iv.wind.breakaway": "Ground-Vehicle Breakaway Force Multiplier"
 }

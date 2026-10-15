@@ -4,7 +4,7 @@ license="LGPL-3.0-only"
 
 [[mods]]
 modId="pmweather_iv"
-version="0.12.1"
+version="0.12.1b"
 displayName="PMWeather Immersive Vehicles"
 authors="G9third"
 description='''
